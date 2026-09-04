@@ -1,0 +1,186 @@
+import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { myListings, deleteListing, updateListing } from '../../services/api.js'
+import { useToast } from '../../components/Toast.jsx'
+import { 
+  Package, 
+  Plus, 
+  Trash2, 
+  MapPin, 
+  Tag, 
+  Scale, 
+  ToggleLeft, 
+  ToggleRight, 
+  Calendar,
+  AlertCircle
+} from 'lucide-react'
+
+export default function FarmerListings() {
+  const [listings, setListings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [togglingId, setTogglingId] = useState(null)
+  const { addToast } = useToast()
+
+  const load = () => {
+    setLoading(true)
+    myListings()
+      .then((res) => setListings(res.data))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [])
+
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Are you sure you want to delete the listing for "${name}"?`)) return
+    try {
+      await deleteListing(id)
+      addToast(`Deleted listing "${name}".`)
+      load()
+    } catch (err) {
+      addToast('Could not delete listing.', 'error')
+    }
+  }
+
+  const handleToggleActive = async (listing) => {
+    setTogglingId(listing.id)
+    try {
+      await updateListing(listing.id, { is_active: !listing.is_active })
+      addToast(`Listing marked as ${!listing.is_active ? 'Active' : 'Inactive'}.`)
+      load()
+    } catch (err) {
+      addToast('Could not update listing status.', 'error')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Produce Listings</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Manage your direct marketplace items. Active listings are immediately visible to buyers.
+          </p>
+        </div>
+        <Link to="/farmer/listings/new" className="btn-primary py-2.5 px-4 text-sm font-semibold shadow-md">
+          <Plus className="w-4 h-4" />
+          Add New Listing
+        </Link>
+      </div>
+
+      {loading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="card p-6 h-28 skeleton rounded-2xl" />
+          ))}
+        </div>
+      ) : listings.length === 0 ? (
+        <div className="card text-center py-20 border-dashed border-2 border-slate-200">
+          <div className="w-16 h-16 rounded-2xl bg-leaf-50 border border-leaf-100 flex items-center justify-center text-leaf-600 mx-auto mb-4">
+            <Package className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-1">No Listings Created Yet</h3>
+          <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
+            Add your harvested or expected crops to connect with buyers directly at zero commission.
+          </p>
+          <Link to="/farmer/listings/new" className="btn-primary">
+            Create Your First Listing
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {listings.map((l) => {
+            const isToggling = togglingId === l.id
+
+            return (
+              <div 
+                key={l.id} 
+                className="card p-6 border border-slate-200/80 shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-extrabold text-xl text-slate-900 capitalize">
+                      {l.product_name}
+                    </h3>
+                    <span className={l.is_active ? 'badge-actual' : 'badge-demo'}>
+                      {l.is_active ? 'Active on Marketplace' : 'Paused / Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-600">
+                    <span className="font-bold text-slate-900 flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-leaf-600" />
+                      {Number(l.quantity_available)} {l.unit} available
+                    </span>
+                    <span>•</span>
+                    <span className="font-bold text-emerald-700 flex items-center gap-1">
+                      ₹{Number(l.price_per_unit).toFixed(2)} /{l.unit}
+                    </span>
+                    {l.location && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-500">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          {l.location}
+                        </span>
+                      </>
+                    )}
+                    {l.quality_grade && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-500">
+                          <Tag className="w-3.5 h-3.5 text-slate-400" />
+                          Grade {l.quality_grade}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-3 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(l)}
+                    disabled={isToggling}
+                    className={`btn-secondary text-xs py-2 px-3.5 font-semibold ${
+                      l.is_active 
+                        ? 'text-amber-700 hover:bg-amber-50 border-amber-200' 
+                        : 'text-leaf-700 hover:bg-leaf-50 border-leaf-200'
+                    }`}
+                  >
+                    {l.is_active ? (
+                      <>
+                        <ToggleRight className="w-4 h-4 text-leaf-600" />
+                        <span>Deactivate</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-4 h-4 text-slate-400" />
+                        <span>Activate</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(l.id, l.product_name)}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                    title="Delete listing"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+    </div>
+  )
+}
+
