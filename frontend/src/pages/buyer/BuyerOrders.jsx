@@ -13,9 +13,12 @@ import {
   Search,
   ExternalLink,
   ChevronRight,
-  ShoppingBag
+  ShoppingBag,
+  Star,
+  Camera
 } from 'lucide-react'
-import { myOrders } from '../../services/api.js'
+import { myOrders, getMyReviews } from '../../services/api.js'
+import ReviewModal from '../../components/ReviewModal.jsx'
 
 const STATUS_CONFIG = {
   PENDING: { label: 'Pending Confirmation', color: 'bg-amber-100 text-amber-800 border-amber-300', step: 1 },
@@ -29,16 +32,41 @@ const STATUS_CONFIG = {
 
 export default function BuyerOrders() {
   const [orders, setOrders] = useState([])
+  const [reviewsList, setReviewsList] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [selectedOrderForReview, setSelectedOrderForReview] = useState(null)
+  const [selectedExistingReview, setSelectedExistingReview] = useState(null)
 
   useEffect(() => {
-    myOrders()
-      .then((res) => setOrders(res.data))
+    Promise.all([myOrders(), getMyReviews()])
+      .then(([ordersRes, revsRes]) => {
+        setOrders(ordersRes.data)
+        setReviewsList(revsRes.data || [])
+      })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false))
   }, [])
+
+  const reviewsByOrderId = {}
+  for (const r of reviewsList) {
+    reviewsByOrderId[r.order_id] = r
+  }
+
+  const handleOpenReview = (order) => {
+    setSelectedOrderForReview(order)
+    setSelectedExistingReview(reviewsByOrderId[order.id] || null)
+    setReviewModalOpen(true)
+  }
+
+  const handleReviewSubmitted = (newReview) => {
+    setReviewsList((prev) => {
+      const filtered = prev.filter((r) => r.order_id !== newReview.order_id)
+      return [newReview, ...filtered]
+    })
+  }
 
   const filteredOrders = orders.filter((o) => {
     const matchesSearch = 
@@ -208,21 +236,58 @@ export default function BuyerOrders() {
                     <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <span>Delivering to: <b className="text-gray-700">{o.delivery_location || 'Address on file'}</b></span>
                   </div>
-                  <Link
-                    to="/transport/my-requests"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-leaf-700 hover:text-leaf-800 hover:underline"
-                  >
-                    <Truck className="w-3.5 h-3.5" />
-                    Track Shipment Status
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Rate & Review Button */}
+                    {o.status !== 'CANCELLED' && (
+                      reviewsByOrderId[o.id] ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReview(o)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 shadow-2xs transition active:scale-98"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span>Rated {reviewsByOrderId[o.id].rating}★ &bull; View Feedback</span>
+                          {reviewsByOrderId[o.id].image_url && <Camera className="w-3 h-3 text-amber-700 ml-0.5" />}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReview(o)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-300 shadow-2xs transition active:scale-98"
+                        >
+                          <Star className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Rate & Review Produce</span>
+                        </button>
+                      )
+                    )}
+
+                    <Link
+                      to={o.transport_request_id ? `/transport/track/${o.transport_request_id}` : `/transport/track/${o.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-leaf-700 hover:text-leaf-800 hover:underline ml-1"
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      Track Shipment
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
               </div>
             )
           })}
         </div>
       )}
+
+      {/* Produce Review & Photo Upload Modal */}
+      <ReviewModal
+        isOpen={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
+        order={selectedOrderForReview}
+        existingReview={selectedExistingReview}
+        onReviewSubmitted={handleReviewSubmitted}
+      />
     </div>
   )
 }
+
 

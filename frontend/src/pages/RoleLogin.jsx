@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useLanguage } from '../context/LanguageContext.jsx'
 import { 
   Sprout, 
   ShoppingBag, 
@@ -13,8 +14,7 @@ import {
   EyeOff, 
   Loader2, 
   AlertCircle, 
-  ArrowLeft,
-  Sparkles
+  ArrowLeft
 } from 'lucide-react'
 
 const ROLE_META = {
@@ -33,14 +33,6 @@ const ROLE_META = {
     demoEmail: 'buyer@example.com',
     demoPassword: 'password123',
     hint: 'Browse the transparent marketplace, order direct produce, and track deliveries.'
-  },
-  fpo: { 
-    label: 'FPO / Cooperative', 
-    icon: Building2, 
-    color: 'from-amber-600 to-orange-700',
-    demoEmail: 'fpo@example.com',
-    demoPassword: 'password123',
-    hint: 'Aggregate member crops, create collective listings, and request bulk transport.'
   },
   transporter: { 
     label: 'Transporter', 
@@ -62,7 +54,52 @@ const ROLE_META = {
 
 export default function RoleLogin({ role }) {
   const { login } = useAuth()
+  const { t, language } = useLanguage()
   const navigate = useNavigate()
+
+  const ROLE_META = {
+    farmer: { 
+      label: t('roles.farmer', 'Farmer'), 
+      icon: Sprout, 
+      color: 'from-emerald-600 to-leaf-700',
+      demoEmail: 'ravi.farmer@example.com',
+      demoPassword: 'Farmer@123',
+      hint: language === 'ta' 
+        ? 'விளைச்சலை நிர்வகிக்கவும், ஆர்டர்களை பார்க்கவும், AI விலை நிலவரத்தை அறியவும்.'
+        : 'Manage your listings, view live orders, and inspect AI market forecasts.'
+    },
+    buyer: { 
+      label: t('roles.buyer', 'Buyer'), 
+      icon: ShoppingBag, 
+      color: 'from-blue-600 to-cyan-700',
+      demoEmail: 'buyer@example.com',
+      demoPassword: 'password123',
+      hint: language === 'ta'
+        ? 'சந்தையில் விளைபொருட்களை வாங்கவும், நேரடி டெலிவரியை கண்காணிக்கவும்.'
+        : 'Browse the transparent marketplace, order direct produce, and track deliveries.'
+    },
+    transporter: { 
+      label: t('roles.transporter', 'Transporter'), 
+      icon: Truck, 
+      color: 'from-purple-600 to-indigo-700',
+      demoEmail: 'transporter@example.com',
+      demoPassword: 'password123',
+      hint: language === 'ta'
+        ? 'ஒதுக்கப்பட்ட சரக்குகளைப் பெறவும், நேரடி ஜிபிஎஸ் நிலவரத்தைப் பகிரவும்.'
+        : 'Accept auto-matched shipments, share live GPS, and update shipment statuses.'
+    },
+    admin: { 
+      label: t('roles.admin', 'Admin'), 
+      icon: ShieldCheck, 
+      color: 'from-rose-600 to-pink-700',
+      demoEmail: 'admin@agridirect.ai',
+      demoPassword: 'admin@123',
+      hint: language === 'ta'
+        ? 'தள மேற்பார்வை, GMV புள்ளிவிவரங்கள் மற்றும் வழித்தட உகப்பாக்கம்.'
+        : 'Platform operations, system verification, GMV stats, and logistics optimizer.'
+    },
+  }
+
   const meta = ROLE_META[role] || ROLE_META.farmer
   const RoleIcon = meta.icon
 
@@ -72,11 +109,6 @@ export default function RoleLogin({ role }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleFillDemo = () => {
-    setEmail(meta.demoEmail)
-    setPassword(meta.demoPassword)
-    setError('')
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -87,6 +119,7 @@ export default function RoleLogin({ role }) {
       navigate(`/${role}/dashboard`)
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Please check your credentials.')
+      setError(err.response?.data?.detail || (language === 'ta' ? 'உள்நுழைவு தோல்வியடைந்தது. விவரங்களை சரிபார்க்கவும்.' : 'Login failed. Please check your credentials.'))
     } finally {
       setLoading(false)
     }
@@ -101,7 +134,7 @@ export default function RoleLogin({ role }) {
           to="/" 
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 mb-6 transition"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Role Selection
+          <ArrowLeft className="w-3.5 h-3.5" /> {language === 'ta' ? 'பிரிவு தேர்வுக்கு திரும்புக' : 'Back to Role Selection'}
         </Link>
 
         {/* Card */}
@@ -114,26 +147,10 @@ export default function RoleLogin({ role }) {
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                {meta.label} Portal
+                {meta.label} {language === 'ta' ? 'போர்டல்' : 'Portal'}
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">{meta.hint}</p>
             </div>
-          </div>
-
-          {/* Quick Demo Fill Pill */}
-          <div className="mb-6 p-3 bg-slate-50 border border-slate-200/70 rounded-xl flex items-center justify-between">
-            <div className="text-xs text-slate-600">
-              <span className="font-semibold text-slate-800">Quick Demo Testing?</span>
-              <p className="text-[11px] text-slate-400">Pre-fill demo credentials</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-2xs active:scale-95 transition"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Auto-Fill
-            </button>
           </div>
 
           {/* Error Message */}
@@ -147,11 +164,11 @@ export default function RoleLogin({ role }) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Account Email</label>
+              <label className="label">{t('auth.emailOrPhone', 'Email or Mobile Number')}</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  className="input pl-10"
+                  className="input !pl-10"
                   type="email"
                   required
                   placeholder="your.email@example.com"
@@ -162,11 +179,11 @@ export default function RoleLogin({ role }) {
             </div>
 
             <div>
-              <label className="label">Password</label>
+              <label className="label">{t('auth.password', 'Password')}</label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  className="input pl-10 pr-10"
+                  className="input !pl-10 !pr-10"
                   type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
@@ -176,7 +193,7 @@ export default function RoleLogin({ role }) {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition p-0.5"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -189,12 +206,14 @@ export default function RoleLogin({ role }) {
               type="submit"
             >
               {loading ? (
-                <>
+                <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing In…</span>
-                </>
+                  <span>{language === 'ta' ? 'உள்நுழைகிறது...' : 'Signing In…'}</span>
+                </div>
               ) : (
-                <span>Sign In to {meta.label} Account</span>
+                <span>
+                  {language === 'ta' ? `${meta.label} கணக்கில் உள்நுழைக` : `Sign In to ${meta.label} Account`}
+                </span>
               )}
             </button>
           </form>
@@ -202,9 +221,9 @@ export default function RoleLogin({ role }) {
           {/* Footer Registration Link */}
           {role !== 'admin' && (
             <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
-              Don't have a {meta.label} account yet?{' '}
+              {t('auth.dontHaveAccount', 'Don\'t have an account?')} ({meta.label}){' '}
               <Link to={`/${role}/register`} className="font-bold text-leaf-700 hover:text-leaf-800 hover:underline">
-                Register here
+                {t('auth.registerNow', 'Register Now')}
               </Link>
             </div>
           )}
@@ -214,4 +233,5 @@ export default function RoleLogin({ role }) {
     </div>
   )
 }
+
 

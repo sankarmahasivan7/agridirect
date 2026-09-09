@@ -3,17 +3,10 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 
 /**
- * Prevents users from accessing dashboards belonging to another role
- * (spec section 4). e.g. a logged-in buyer hitting /farmer/dashboard
- * is redirected to their own dashboard, not shown farmer data.
- */
-/**
- * Prevents users from accessing dashboards belonging to another role
- * (spec section 4). e.g. a logged-in buyer hitting /farmer/dashboard
- * is redirected to their own dashboard, not shown farmer data.
+ * Prevents users from accessing dashboards belonging to another role.
+ * e.g. a logged-in buyer hitting /farmer/dashboard is redirected to their own dashboard.
  *
- * allowedRole can be a single role string or an array of roles (e.g. listing
- * management screens are shared between farmer and fpo accounts).
+ * allowedRole can be a single role string or an array of roles.
  */
 export default function ProtectedRoute({ allowedRole, children }) {
   const { isAuthenticated, role } = useAuth()

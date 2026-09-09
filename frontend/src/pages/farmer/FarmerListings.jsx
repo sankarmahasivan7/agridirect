@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { myListings, deleteListing, updateListing } from '../../services/api.js'
 import { useToast } from '../../components/Toast.jsx'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 import { 
   Package, 
   Plus, 
@@ -12,7 +13,8 @@ import {
   ToggleLeft, 
   ToggleRight, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Edit3
 } from 'lucide-react'
 
 export default function FarmerListings() {
@@ -20,6 +22,8 @@ export default function FarmerListings() {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState(null)
   const { addToast } = useToast()
+  const { language } = useLanguage()
+  const isTa = language === 'ta'
 
   const load = () => {
     setLoading(true)
@@ -58,7 +62,7 @@ export default function FarmerListings() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Produce Listings</h1>
           <p className="text-slate-500 text-sm mt-1">
@@ -70,6 +74,21 @@ export default function FarmerListings() {
           Add New Listing
         </Link>
       </div>
+
+      {/* Perishability Notice Banner */}
+      {listings.some(l => l.is_active && (l.perishability_status === 'CRITICAL' || l.perishability_status === 'URGENT' || l.perishability_status === 'SELL SOON')) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-amber-900 text-xs flex items-start gap-3 shadow-xs">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-sm">
+              Perishability Notice: Active lot(s) approaching sell-by date
+            </p>
+            <p className="mt-0.5 text-amber-800">
+              Our algorithm is actively prioritizing nearby bulk buyers, restaurants, and food processors to accelerate off-take and reduce avoidable waste.
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">
@@ -108,6 +127,19 @@ export default function FarmerListings() {
                     <span className={l.is_active ? 'badge-actual' : 'badge-demo'}>
                       {l.is_active ? 'Active on Marketplace' : 'Paused / Inactive'}
                     </span>
+                    {l.perishability_status && (
+                      <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
+                        l.perishability_status === 'CRITICAL'
+                          ? 'bg-red-50 text-red-700 border-red-300 animate-pulse'
+                          : l.perishability_status === 'URGENT'
+                          ? 'bg-orange-50 text-orange-700 border-orange-300'
+                          : l.perishability_status === 'SELL SOON'
+                          ? 'bg-amber-50 text-amber-700 border-amber-300'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {l.perishability_status}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-600">
@@ -119,6 +151,14 @@ export default function FarmerListings() {
                     <span className="font-bold text-emerald-700 flex items-center gap-1">
                       ₹{Number(l.price_per_unit).toFixed(2)} /{l.unit}
                     </span>
+                    {l.expected_sell_by_date && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-600 font-medium">
+                          Sell-by: <b className="text-slate-800">{l.expected_sell_by_date}</b>
+                        </span>
+                      </>
+                    )}
                     {l.location && (
                       <>
                         <span>•</span>
@@ -141,12 +181,21 @@ export default function FarmerListings() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-3 self-end sm:self-center">
+                <div className="flex items-center gap-2.5 self-end sm:self-center">
+                  <Link
+                    to={`/farmer/listings/edit/${l.id}`}
+                    className="btn-secondary text-xs py-2 px-3 font-semibold text-slate-700 hover:text-slate-900 inline-flex items-center gap-1.5 shadow-2xs"
+                    title="Edit listing"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{isTa ? 'மாற்றுக' : 'Edit'}</span>
+                  </Link>
+
                   <button
                     type="button"
                     onClick={() => handleToggleActive(l)}
                     disabled={isToggling}
-                    className={`btn-secondary text-xs py-2 px-3.5 font-semibold ${
+                    className={`btn-secondary text-xs py-2 px-3 font-semibold ${
                       l.is_active 
                         ? 'text-amber-700 hover:bg-amber-50 border-amber-200' 
                         : 'text-leaf-700 hover:bg-leaf-50 border-leaf-200'
@@ -155,12 +204,12 @@ export default function FarmerListings() {
                     {l.is_active ? (
                       <>
                         <ToggleRight className="w-4 h-4 text-leaf-600" />
-                        <span>Deactivate</span>
+                        <span>{isTa ? 'முடக்கு' : 'Deactivate'}</span>
                       </>
                     ) : (
                       <>
                         <ToggleLeft className="w-4 h-4 text-slate-400" />
-                        <span>Activate</span>
+                        <span>{isTa ? 'செயல்படுத்து' : 'Activate'}</span>
                       </>
                     )}
                   </button>
@@ -169,7 +218,7 @@ export default function FarmerListings() {
                     type="button"
                     onClick={() => handleDelete(l.id, l.product_name)}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
-                    title="Delete listing"
+                    title={isTa ? 'பட்டியலை நீக்கு' : 'Delete listing'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
@@ -7,10 +8,14 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.core.deps import require_role
 from app.models.models import (
-    User, RoleEnum, ProductListing, Order, OrderItem, OrderStatusEnum, Transaction, Notification
+    User, RoleEnum, ProductListing, Order, OrderItem, OrderStatusEnum, Transaction, Notification,
+    PaymentMethodEnum, PaymentStatusEnum, Payment, TransportRequest
 )
 from app.schemas.schemas import OrderCreate, OrderOut, OrderItemOut
 from app.services.transport_service import create_transport_requests_for_order
+from app.services.notification_service import notify_order_placed
+from app.services.batch_service import create_fulfillment_items_for_order, create_delivery_batches, _resolve_order_district
+from app.services.payment_service import create_razorpay_order
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -19,22 +24,90 @@ def _q(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _serialize_order(order: Order) -> OrderOut:
+def dispatch_order_fulfillment(db: Session, order: Order):
+    """
+    Activates delivery jobs, splits by source warehouses, creates transport requests and batches.
+    Only called when an order is confirmed (immediately for POD, or after payment verification for UPI).
+    """
+    # Split order internally into OrderFulfillmentItems linked to source warehouses
+    create_fulfillment_items_for_order(db, order)
+
+    # Automatically request and assign transport
+    create_transport_requests_for_order(db, order)
+    db.flush()
+
+    # Automatically trigger multi-order consolidation for this delivery district
+    order_district = _resolve_order_district(order)
+    create_delivery_batches(db, delivery_district=order_district)
+    db.flush()
+
+    # Dispatch real-time push notifications across Buyer, Seller(s), and Transporters
+    notify_order_placed(db, order)
+
+
+def _serialize_order(order: Order, razorpay_order: dict = None, db: Session = None) -> OrderOut:
     items = [
         OrderItemOut(
             listing_id=item.listing_id,
-            product_name=item.listing.product.name,
+            product_name=item.listing.product.name if item.listing and item.listing.product else "Produce Item",
             quantity=item.quantity,
             price_at_purchase=item.price_at_purchase,
             line_subtotal=item.line_subtotal,
         )
         for item in order.items
     ]
+
+    rzp_order_id = razorpay_order.get("id") if razorpay_order else (
+        order.payment.gateway_order_id if order.payment and order.payment.gateway_order_id else None
+    )
+    rzp_key_id = razorpay_order.get("key_id") if razorpay_order else (
+        settings.RAZORPAY_KEY_ID if order.payment_method == PaymentMethodEnum.UPI else None
+    )
+    amount_paise = razorpay_order.get("amount") if razorpay_order else (
+        int(order.total_amount * Decimal("100")) if order.payment_method == PaymentMethodEnum.UPI else None
+    )
+
+    is_upi = order.payment_method == PaymentMethodEnum.UPI
+    upi_id = settings.DEFAULT_UPI_ID if is_upi else None
+    upi_name = settings.DEFAULT_UPI_NAME if is_upi else None
+    upi_uri = (
+        f"upi://pay?pa={upi_id}&pn={quote(upi_name)}&mc=0000&mode=02&purpose=00&am={order.total_amount:.2f}&cu=INR&tn=AgriDirect_Order_{order.id}"
+        if is_upi
+        else None
+    )
+
+    transport_request_id = None
+    if getattr(order, "transport_requests", None):
+        transport_request_id = order.transport_requests[0].id
+    elif db is not None:
+        tr = db.query(TransportRequest.id).filter(TransportRequest.order_id == order.id).first()
+        if tr:
+            transport_request_id = tr[0]
+
     return OrderOut(
-        id=order.id, subtotal=order.subtotal, logistics_cost=order.logistics_cost,
-        platform_fee=order.platform_fee, total_amount=order.total_amount,
-        delivery_location=order.delivery_location, status=order.status,
-        created_at=order.created_at, items=items,
+        id=order.id,
+        subtotal=order.subtotal,
+        logistics_cost=order.logistics_cost,
+        platform_fee=order.platform_fee,
+        total_amount=order.total_amount,
+        delivery_location=order.delivery_location,
+        status=order.status,
+        payment_method=order.payment_method,
+        payment_status=order.payment_status,
+        paid_at=order.paid_at,
+        farmer_settlement_amount=order.farmer_settlement_amount,
+        transporter_settlement_amount=order.transporter_settlement_amount,
+        platform_commission_amount=order.platform_commission_amount,
+        razorpay_order_id=rzp_order_id,
+        razorpay_key_id=rzp_key_id,
+        amount_paise=amount_paise,
+        currency="INR",
+        upi_uri=upi_uri,
+        upi_id=upi_id,
+        upi_name=upi_name,
+        transport_request_id=transport_request_id,
+        created_at=order.created_at,
+        items=items,
     )
 
 
@@ -45,10 +118,9 @@ def create_order(
     user: User = Depends(require_role(RoleEnum.buyer)),
 ):
     """
-    Validates every requested quantity against the ACTUAL available quantity,
-    locks the rows, and decrements inventory atomically to prevent overselling
-    (spec sections 14, 15, 42). If any item fails validation, the whole order
-    is rejected -- no partial fake fulfillment.
+    Validates requested quantities against the ACTUAL available quantities,
+    locks the rows, and decrements inventory atomically to prevent overselling.
+    Supports PAY_ON_DELIVERY and UPI / ONLINE PAYMENT methods.
     """
     if not payload.items:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cart is empty")
@@ -100,6 +172,14 @@ def create_order(
     platform_fee = _q(subtotal * Decimal(str(settings.PLATFORM_FEE_PERCENT)) / Decimal("100"))
     total_amount = _q(subtotal + logistics_cost + platform_fee)
 
+    # Determine initial status by payment method
+    is_pod = payload.payment_method == PaymentMethodEnum.PAY_ON_DELIVERY
+    is_upi = payload.payment_method == PaymentMethodEnum.UPI
+    # POD: order is CONFIRMED, payment is PENDING, dispatch immediately
+    # UPI: order is PENDING, payment is PENDING, dispatch withheld until verification
+    # Legacy/unspecified: order is PENDING, dispatch immediately
+    initial_order_status = OrderStatusEnum.CONFIRMED if is_pod else OrderStatusEnum.PENDING
+
     order = Order(
         buyer_id=user.buyer_profile.id,
         subtotal=subtotal,
@@ -109,7 +189,12 @@ def create_order(
         delivery_location=payload.delivery_location,
         delivery_latitude=payload.delivery_latitude,
         delivery_longitude=payload.delivery_longitude,
-        status=OrderStatusEnum.PENDING,
+        status=initial_order_status,
+        payment_method=payload.payment_method,
+        payment_status=PaymentStatusEnum.PENDING,
+        farmer_settlement_amount=subtotal,
+        transporter_settlement_amount=logistics_cost,
+        platform_commission_amount=platform_fee,
         items=order_items,
     )
     db.add(order)
@@ -117,42 +202,60 @@ def create_order(
 
     db.add(Transaction(order_id=order.id, platform_fee_amount=platform_fee, logistics_revenue_amount=logistics_cost))
 
-    # Notify sellers of the new order (best-effort; farmer/FPO id resolved per item).
-    notified = set()
-    for item in order_items:
-        listing = item.listing
-        target_user_id = None
-        if listing.farmer_id:
-            target_user_id = listing.farmer.user_id
-        elif listing.fpo_id:
-            target_user_id = listing.fpo.user_id
-        if target_user_id and target_user_id not in notified:
-            db.add(Notification(
-                user_id=target_user_id, title="New order received",
-                message=f"You have a new order for {listing.product.name}.",
-            ))
-            notified.add(target_user_id)
-
-    db.flush()
-    # Automatically request and assign transport -- the buyer never has to
-    # ask for this manually (spec: auto-assign based on farmer/buyer location).
-    create_transport_requests_for_order(db, order)
+    rzp_order = None
+    if is_pod:
+        # Pay on Delivery: payment created as PENDING, fulfillment triggered immediately
+        payment = Payment(
+            order_id=order.id,
+            amount=total_amount,
+            currency="INR",
+            payment_method=PaymentMethodEnum.PAY_ON_DELIVERY,
+            payment_status=PaymentStatusEnum.PENDING,
+            farmer_amount=subtotal,
+            transporter_amount=logistics_cost,
+            commission_amount=platform_fee,
+        )
+        db.add(payment)
+        dispatch_order_fulfillment(db, order)
+    elif is_upi:
+        # UPI / Online Payment: Create Razorpay Order from backend.
+        # Inventory is reserved, but delivery jobs are withheld until verification!
+        rzp_order = create_razorpay_order(order)
+        payment = Payment(
+            order_id=order.id,
+            amount=total_amount,
+            currency="INR",
+            payment_method=PaymentMethodEnum.UPI,
+            payment_status=PaymentStatusEnum.PENDING,
+            gateway="RAZORPAY",
+            gateway_order_id=rzp_order["id"],
+            farmer_amount=subtotal,
+            transporter_amount=logistics_cost,
+            commission_amount=platform_fee,
+        )
+        db.add(payment)
+    else:
+        # Legacy / default without payment method
+        dispatch_order_fulfillment(db, order)
 
     db.commit()
     db.refresh(order)
-    return _serialize_order(order)
+    return _serialize_order(order, razorpay_order=rzp_order, db=db)
 
 
 @router.get("/mine", response_model=list[OrderOut])
 def my_orders(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.buyer))):
     orders = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.listing))
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.transport_requests),
+        )
         .filter(Order.buyer_id == user.buyer_profile.id)
         .order_by(Order.created_at.desc())
         .all()
     )
-    return [_serialize_order(o) for o in orders]
+    return [_serialize_order(o, db=db) for o in orders]
 
 
 @router.get("/seller", response_model=list[OrderOut])
@@ -179,12 +282,15 @@ def seller_orders(db: Session = Depends(get_db), user: User = Depends(require_ro
 
     orders = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.listing))
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.transport_requests),
+        )
         .filter(Order.id.in_(order_ids))
         .order_by(Order.created_at.desc())
         .all()
     )
-    return [_serialize_order(o) for o in orders]
+    return [_serialize_order(o, db=db) for o in orders]
 
 
 @router.put("/{order_id}/status", response_model=OrderOut)
@@ -194,7 +300,15 @@ def update_order_status(
     user: User = Depends(require_role(RoleEnum.farmer, RoleEnum.fpo, RoleEnum.admin)),
 ):
     """Farmer/FPO accepts/rejects/progresses an order (spec section 3 - Farmer)."""
-    order = db.query(Order).options(joinedload(Order.items).joinedload(OrderItem.listing)).filter(Order.id == order_id).first()
+    order = (
+        db.query(Order)
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.transport_requests),
+        )
+        .filter(Order.id == order_id)
+        .first()
+    )
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
@@ -216,4 +330,4 @@ def update_order_status(
     order.status = new_status
     db.commit()
     db.refresh(order)
-    return _serialize_order(order)
+    return _serialize_order(order, db=db)

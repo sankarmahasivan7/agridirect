@@ -3,11 +3,13 @@ import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react'
 
 const ToastContext = createContext(null)
 
+let toastCounter = 0
+
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
   const addToast = useCallback((message, type = 'success', duration = 3500) => {
-    const id = Date.now() + Math.random()
+    const id = ++toastCounter
     setToasts((prev) => [...prev, { id, message, type }])
 
     setTimeout(() => {

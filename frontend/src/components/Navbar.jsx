@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useCart } from '../context/CartContext.jsx'
+import { useLanguage } from '../context/LanguageContext.jsx'
 import { 
   Sprout, 
   LayoutDashboard, 
@@ -13,23 +14,26 @@ import {
   X, 
   Sparkles,
   User,
-  ShieldAlert
+  Globe,
+  TrendingUp,
+  ClipboardList
 } from 'lucide-react'
-
-const ROLE_BADGES = {
-  farmer: { label: 'Farmer', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  buyer: { label: 'Buyer', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  fpo: { label: 'FPO', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  transporter: { label: 'Transporter', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  admin: { label: 'Admin', color: 'bg-rose-100 text-rose-800 border-rose-200' },
-}
+import NotificationBell from './NotificationBell.jsx'
 
 export default function Navbar() {
   const { isAuthenticated, role, logout } = useAuth()
   const { items } = useCart()
+  const { language, setLanguage, t } = useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const ROLE_BADGES = {
+    farmer: { label: t('roles.farmer', 'Farmer'), color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+    buyer: { label: t('roles.buyer', 'Buyer'), color: 'bg-blue-100 text-blue-800 border-blue-200' },
+    transporter: { label: t('roles.transporter', 'Transporter'), color: 'bg-purple-100 text-purple-800 border-purple-200' },
+    admin: { label: t('roles.admin', 'Admin'), color: 'bg-rose-100 text-rose-800 border-rose-200' },
+  }
 
   const dashboardPath = role ? `/${role}/dashboard` : '/'
 
@@ -43,6 +47,34 @@ export default function Navbar() {
 
   const cartCount = items.reduce((sum, item) => sum + (Number(item.quantity) > 0 ? 1 : 0), 0)
 
+  const LanguageSwitcher = () => (
+    <div className="flex items-center rounded-xl bg-slate-100/90 p-1 border border-slate-200/80 shadow-inner">
+      <Globe className="w-3.5 h-3.5 text-slate-500 mx-1.5 shrink-0" />
+      <button
+        onClick={() => setLanguage('en')}
+        className={`px-2 py-0.5 text-xs font-bold rounded-lg transition-all ${
+          language === 'en'
+            ? 'bg-white text-leaf-800 shadow-sm'
+            : 'text-slate-500 hover:text-slate-900'
+        }`}
+        title="Switch to English"
+      >
+        EN
+      </button>
+      <button
+        onClick={() => setLanguage('ta')}
+        className={`px-2.5 py-0.5 text-xs font-bold rounded-lg transition-all ${
+          language === 'ta'
+            ? 'bg-leaf-600 text-white shadow-sm'
+            : 'text-slate-500 hover:text-slate-900'
+        }`}
+        title="தமிழுக்கு மாறவும் (Switch to Tamil)"
+      >
+        தமிழ்
+      </button>
+    </div>
+  )
+
   return (
     <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/90 border-b border-slate-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -55,77 +87,120 @@ export default function Navbar() {
             </div>
             <div>
               <span className="font-extrabold text-xl tracking-tight text-slate-900 flex items-center gap-1.5">
-                AgriDirect <span className="bg-gradient-to-r from-leaf-600 to-emerald-500 bg-clip-text text-transparent">AI</span>
+                {t('nav.brand', 'AgriDirect')} <span className="bg-gradient-to-r from-leaf-600 to-emerald-500 bg-clip-text text-transparent">AI</span>
               </span>
-              <span className="hidden sm:block text-[10px] uppercase font-bold tracking-widest text-slate-400 -mt-1">Direct Farmer Commerce</span>
+              <span className="hidden sm:block text-[10px] uppercase font-bold tracking-widest text-slate-400 -mt-1">
+                {t('nav.brandSubtitle', 'Direct Farmer Commerce')}
+              </span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-2">
+            
+            {/* Live Market Rates Nav Item */}
+            <Link
+              to="/market-prices"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+                isActive('/market-prices')
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/50'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <span>{t('nav.marketPrices', 'Market Rates')}</span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md font-bold">
+                Live
+              </span>
+            </Link>
+
+            <div className="h-5 w-px bg-slate-200 mx-1" />
+
+            {/* Language Switcher */}
+            <LanguageSwitcher />
+
+            <div className="h-5 w-px bg-slate-200 mx-1" />
+
             {isAuthenticated ? (
               <>
                 <Link
                   to={dashboardPath}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                     isActive(dashboardPath)
                       ? 'bg-leaf-50 text-leaf-800 font-semibold'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <LayoutDashboard className="w-4 h-4 text-leaf-600" />
-                  Dashboard
+                  {t('nav.dashboard', 'Dashboard')}
                 </Link>
 
                 {role === 'buyer' && (
                   <Link
                     to="/buyer/marketplace"
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                       isActive('/buyer/marketplace')
                         ? 'bg-leaf-50 text-leaf-800 font-semibold'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <ShoppingBag className="w-4 h-4 text-leaf-600" />
-                    Marketplace
+                    {t('nav.marketplace', 'Marketplace')}
                   </Link>
                 )}
 
-                {['farmer', 'buyer', 'fpo'].includes(role) && (
+                {role === 'buyer' && (
+                  <Link
+                    to="/buyer/orders"
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                      isActive('/buyer/orders')
+                        ? 'bg-leaf-50 text-leaf-800 font-semibold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <ClipboardList className="w-4 h-4 text-leaf-600" />
+                    {t('nav.orders', 'My Orders')}
+                  </Link>
+                )}
+
+                {['farmer', 'buyer'].includes(role) && (
                   <Link
                     to="/transport/my-requests"
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                       isActive('/transport')
                         ? 'bg-leaf-50 text-leaf-800 font-semibold'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <Truck className="w-4 h-4 text-purple-600" />
-                    Shipments
+                    {t('nav.shipments', 'Shipments')}
                   </Link>
                 )}
 
                 {role === 'farmer' && (
                   <Link
                     to="/farmer/ai-insights"
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                       isActive('/farmer/ai-insights')
                         ? 'bg-ai-50 text-ai-700 font-semibold'
                         : 'text-slate-600 hover:text-ai-600 hover:bg-ai-50/50'
                     }`}
                   >
                     <Sparkles className="w-4 h-4 text-ai-600" />
-                    AI Insights
+                    {t('nav.aiInsights', 'AI Insights')}
                   </Link>
                 )}
+
+                {/* In-app Push Notification Bell */}
+                <NotificationBell />
 
                 {role === 'buyer' && (
                   <Link
                     to="/buyer/cart"
-                    className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-leaf-800 hover:bg-leaf-50 transition-all"
+                    className="relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-leaf-800 hover:bg-leaf-50 transition-all"
                   >
                     <ShoppingCart className="w-4 h-4 text-leaf-600" />
-                    Cart
+                    {t('nav.cart', 'Cart')}
                     {cartCount > 0 && (
                       <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-leaf-600 rounded-full animate-bounce">
                         {cartCount}
@@ -135,9 +210,9 @@ export default function Navbar() {
                 )}
 
                 {/* Role Pill & Logout */}
-                <div className="h-6 w-px bg-slate-200 mx-2" />
+                <div className="h-6 w-px bg-slate-200 mx-1.5" />
 
-                <div className="flex items-center gap-2.5 pl-1">
+                <div className="flex items-center gap-2 pl-1">
                   <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${ROLE_BADGES[role]?.color || 'bg-slate-100 text-slate-700'}`}>
                     <User className="w-3.5 h-3.5" />
                     {ROLE_BADGES[role]?.label || role}
@@ -145,7 +220,7 @@ export default function Navbar() {
 
                   <button
                     onClick={handleLogout}
-                    title="Sign Out"
+                    title={t('nav.signOut', 'Sign Out')}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                   >
                     <LogOut className="w-4 h-4" />
@@ -158,20 +233,24 @@ export default function Navbar() {
                   to="/"
                   className="text-sm font-semibold text-slate-700 hover:text-leaf-700 px-3 py-2 transition"
                 >
-                  Explore Roles
+                  {t('nav.exploreRoles', 'Explore Roles')}
                 </Link>
                 <Link
                   to="/buyer/login"
                   className="btn-primary text-sm py-2 px-4 shadow-sm"
                 >
-                  Get Started
+                  {t('nav.getStarted', 'Get Started')}
                 </Link>
               </div>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Right Bar (Language Switcher + Bell + Cart + Menu Button) */}
           <div className="flex items-center gap-2 md:hidden">
+            <LanguageSwitcher />
+
+            {isAuthenticated && <NotificationBell />}
+
             {role === 'buyer' && cartCount > 0 && (
               <Link to="/buyer/cart" className="relative p-2 text-slate-700">
                 <ShoppingCart className="w-5 h-5 text-leaf-600" />
@@ -180,6 +259,7 @@ export default function Navbar() {
                 </span>
               </Link>
             )}
+
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
@@ -195,12 +275,30 @@ export default function Navbar() {
       {/* Mobile Menu Drawer */}
       {mobileOpen && (
         <div className="md:hidden border-t border-slate-100 bg-white px-4 pt-3 pb-5 space-y-2 animate-in fade-in duration-200">
+          
+          {/* Live Market Rates in mobile drawer */}
+          <Link
+            to="/market-prices"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center justify-between px-3 py-2.5 rounded-xl text-emerald-900 font-bold bg-emerald-50 border border-emerald-200 mb-2"
+          >
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              <span>{t('nav.marketPrices', 'Market Rates')}</span>
+            </div>
+            <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">
+              Live Mandi
+            </span>
+          </Link>
+
           {isAuthenticated ? (
             <>
               <div className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-xl mb-3">
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-slate-500" />
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Logged in as</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {t('nav.loggedInAs', 'Logged in as')}
+                  </span>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${ROLE_BADGES[role]?.color}`}>
                   {ROLE_BADGES[role]?.label || role}
@@ -213,7 +311,7 @@ export default function Navbar() {
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 font-medium hover:bg-leaf-50 hover:text-leaf-700"
               >
                 <LayoutDashboard className="w-5 h-5 text-leaf-600" />
-                {ROLE_BADGES[role]?.label || role} Dashboard
+                {ROLE_BADGES[role]?.label || role} {t('nav.dashboard', 'Dashboard')}
               </Link>
 
               {role === 'buyer' && (
@@ -223,18 +321,29 @@ export default function Navbar() {
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 font-medium hover:bg-leaf-50 hover:text-leaf-700"
                 >
                   <ShoppingBag className="w-5 h-5 text-leaf-600" />
-                  Marketplace
+                  {t('nav.marketplace', 'Marketplace')}
                 </Link>
               )}
 
-              {['farmer', 'buyer', 'fpo'].includes(role) && (
+              {role === 'buyer' && (
+                <Link
+                  to="/buyer/orders"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 font-medium hover:bg-leaf-50 hover:text-leaf-700"
+                >
+                  <ClipboardList className="w-5 h-5 text-leaf-600" />
+                  {t('nav.orders', 'My Orders')}
+                </Link>
+              )}
+
+              {['farmer', 'buyer'].includes(role) && (
                 <Link
                   to="/transport/my-requests"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 font-medium hover:bg-leaf-50 hover:text-leaf-700"
                 >
                   <Truck className="w-5 h-5 text-purple-600" />
-                  Shipments & Tracking
+                  {t('nav.shipments', 'Shipments')}
                 </Link>
               )}
 
@@ -245,7 +354,7 @@ export default function Navbar() {
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 font-medium hover:bg-ai-50 hover:text-ai-700"
                 >
                   <Sparkles className="w-5 h-5 text-ai-600" />
-                  AI Intelligence & Forecasting
+                  {t('nav.aiInsights', 'AI Insights')}
                 </Link>
               )}
 
@@ -257,11 +366,11 @@ export default function Navbar() {
                 >
                   <div className="flex items-center gap-3">
                     <ShoppingCart className="w-5 h-5 text-leaf-600" />
-                    Shopping Cart
+                    {t('nav.cart', 'Cart')}
                   </div>
                   {cartCount > 0 && (
                     <span className="px-2 py-0.5 text-xs font-bold text-white bg-leaf-600 rounded-full">
-                      {cartCount} items
+                      {cartCount} {t('nav.items', 'items')}
                     </span>
                   )}
                 </Link>
@@ -273,7 +382,7 @@ export default function Navbar() {
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-red-600 font-semibold bg-red-50 hover:bg-red-100 rounded-xl transition"
                 >
                   <LogOut className="w-4 h-4" />
-                  Sign Out
+                  {t('nav.signOut', 'Sign Out')}
                 </button>
               </div>
             </>
@@ -284,14 +393,14 @@ export default function Navbar() {
                 onClick={() => setMobileOpen(false)}
                 className="block text-center py-2.5 text-slate-700 font-semibold hover:bg-slate-50 rounded-xl"
               >
-                Explore Roles
+                {t('nav.exploreRoles', 'Explore Roles')}
               </Link>
               <Link
                 to="/buyer/login"
                 onClick={() => setMobileOpen(false)}
                 className="btn-primary w-full text-center block"
               >
-                Sign In / Get Started
+                {t('nav.signIn', 'Sign In')} / {t('nav.getStarted', 'Get Started')}
               </Link>
             </div>
           )}
@@ -300,4 +409,3 @@ export default function Navbar() {
     </nav>
   )
 }
-

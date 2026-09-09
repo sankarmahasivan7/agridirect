@@ -26,7 +26,13 @@ import {
   Cell,
   Legend
 } from 'recharts'
-import { adminDashboard, optimizeLogistics } from '../../services/api.js'
+import { 
+  adminDashboard, 
+  optimizeLogistics,
+  triggerAutoBatch,
+  listBatches,
+  batchAdminStats,
+} from '../../services/api.js'
 
 const USER_COLORS = ['#16a34a', '#0284c7', '#d97706']
 
@@ -35,17 +41,47 @@ export default function AdminDashboard() {
   const [logistics, setLogistics] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Batched Delivery State
+  const [batchStats, setBatchStats] = useState(null)
+  const [batchesList, setBatchesList] = useState([])
+  const [batchDistrict, setBatchDistrict] = useState('')
+  const [autoBatching, setAutoBatching] = useState(false)
+  const [batchMsg, setBatchMsg] = useState('')
+
   const loadData = () => {
     setLoading(true)
-    adminDashboard()
-      .then((res) => setData(res.data))
-      .catch((err) => console.error(err))
+    Promise.all([
+      adminDashboard().catch((err) => { console.error(err); return { data: null } }),
+      batchAdminStats().catch((err) => { console.error(err); return { data: null } }),
+      listBatches().catch((err) => { console.error(err); return { data: [] } }),
+    ])
+      .then(([dashRes, statsRes, batchesRes]) => {
+        if (dashRes.data) setData(dashRes.data)
+        if (statsRes.data) setBatchStats(statsRes.data)
+        if (batchesRes.data) setBatchesList(batchesRes.data)
+      })
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     loadData()
   }, [])
+
+  const handleTriggerBatch = async () => {
+    setAutoBatching(true)
+    setBatchMsg('')
+    try {
+      const res = await triggerAutoBatch(batchDistrict || undefined)
+      setBatchMsg(`Consolidation engine completed! ${res.data?.length || 0} delivery batch(es) created or updated.`)
+      // Refresh stats & list
+      batchAdminStats().then((s) => s.data && setBatchStats(s.data))
+      listBatches().then((b) => b.data && setBatchesList(b.data))
+    } catch (err) {
+      setBatchMsg(err.response?.data?.detail || 'Error executing multi-order batching engine.')
+    } finally {
+      setAutoBatching(false)
+    }
+  }
 
   const handleOptimize = async () => {
     setLogistics({ loading: true })
@@ -61,7 +97,7 @@ export default function AdminDashboard() {
   const userDistribution = data ? [
     { name: 'Farmers', count: data.farmers, color: '#16a34a' },
     { name: 'Buyers', count: data.buyers, color: '#0284c7' },
-    { name: 'FPOs', count: data.fpos, color: '#d97706' },
+    { name: 'Transporters', count: data.transporters || 0, color: '#7c3aed' },
   ] : []
 
   const stats = data ? [
@@ -187,9 +223,9 @@ export default function AdminDashboard() {
                     <span className="font-semibold text-blue-900">Registered Buyers</span>
                     <span className="font-extrabold text-blue-700">{data.buyers}</span>
                   </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-200">
-                    <span className="font-semibold text-amber-900">Farmer Cooperatives (FPOs)</span>
-                    <span className="font-extrabold text-amber-700">{data.fpos}</span>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-purple-50 border border-purple-200">
+                    <span className="font-semibold text-purple-900">Fleet Transporters</span>
+                    <span className="font-extrabold text-purple-700">{data.transporters || 0}</span>
                   </div>
                 </div>
               </div>
@@ -198,6 +234,157 @@ export default function AdminDashboard() {
                 Direct buyer-to-farmer transactions preserve 100% grower margin without auction fee deductions.
               </div>
             </div>
+          </div>
+
+          {/* Batched Delivery Operations & 3PL Logistics Control */}
+          <div className="card p-6 border-2 border-indigo-100 bg-gradient-to-b from-white to-indigo-50/20 shadow-md mb-8 rounded-2xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 mb-5 border-b border-indigo-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-sm">
+                    <Layers className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-extrabold font-display text-lg text-slate-900">
+                      Consolidated Batched Delivery & 3PL Fleet Allocation
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Multi-order grouped vehicle trips across Tenkasi, Tirunelveli, and Thoothukudi Central Warehouses
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <select
+                  value={batchDistrict}
+                  onChange={(e) => setBatchDistrict(e.target.value)}
+                  className="input py-2 px-3 text-xs w-44 bg-white border border-indigo-200 rounded-xl"
+                >
+                  <option value="">All Supported Districts</option>
+                  <option value="Tenkasi">Tenkasi</option>
+                  <option value="Tirunelveli">Tirunelveli</option>
+                  <option value="Thoothukudi">Thoothukudi</option>
+                </select>
+
+                <button
+                  onClick={handleTriggerBatch}
+                  disabled={autoBatching}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${autoBatching ? 'animate-spin' : ''}`} />
+                  {autoBatching ? 'Consolidating Orders...' : 'Run Auto-Batching Engine'}
+                </button>
+              </div>
+            </div>
+
+            {batchMsg && (
+              <div className="mb-4 p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>{batchMsg}</span>
+              </div>
+            )}
+
+            {/* Batch Metrics Grid */}
+            {batchStats && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Batches</p>
+                  <p className="text-xl font-black text-slate-900 mt-1">{batchStats.total_batches}</p>
+                  <p className="text-[10px] text-slate-400">{batchStats.total_orders_in_batches} orders grouped</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Claims</p>
+                  <p className="text-xl font-black text-amber-600 mt-1">{batchStats.pending_batches}</p>
+                  <p className="text-[10px] text-amber-600/70">Awaiting 3PL drivers</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In Transit</p>
+                  <p className="text-xl font-black text-sky-600 mt-1">{batchStats.active_transport_jobs}</p>
+                  <p className="text-[10px] text-sky-600/70">On the road</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivered</p>
+                  <p className="text-xl font-black text-emerald-600 mt-1">{batchStats.completed_deliveries}</p>
+                  <p className="text-[10px] text-emerald-600/70">{batchStats.total_customers_served} customers served</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cargo Weight</p>
+                  <p className="text-xl font-black text-slate-900 mt-1">{batchStats.total_cargo_transported_kg} <span className="text-xs font-normal">kg</span></p>
+                  <p className="text-[10px] text-slate-400">Total freight moved</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warehouses</p>
+                  <p className="text-xl font-black text-purple-600 mt-1">3</p>
+                  <p className="text-[10px] text-purple-600/70">TKS &bull; TNV &bull; TUT</p>
+                </div>
+              </div>
+            )}
+
+            {/* Warehouse Hubs Badges */}
+            <div className="p-3 rounded-xl bg-white border border-indigo-100 mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="font-bold text-slate-700">Farmer Aggregation Hubs (Logistics Infrastructure Only &bull; No Commercial Resale):</span>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">
+                  Tenkasi Central Agri-Warehouse
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 font-semibold">
+                  Tirunelveli Central Agri-Warehouse
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 font-semibold">
+                  Thoothukudi Port Agri-Warehouse
+                </span>
+              </div>
+            </div>
+
+            {/* Batches Table */}
+            {batchesList.length === 0 ? (
+              <div className="text-center py-8 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-500">
+                No consolidated delivery batches created yet. Click "Run Auto-Batching Engine" above or place orders across districts.
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">Batch Code</th>
+                        <th className="py-3 px-4">Destination District</th>
+                        <th className="py-3 px-4">Cargo Weight</th>
+                        <th className="py-3 px-4">Orders</th>
+                        <th className="py-3 px-4">Stops</th>
+                        <th className="py-3 px-4">Est. Payout</th>
+                        <th className="py-3 px-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {batchesList.map((b) => (
+                        <tr key={b.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-3 px-4 font-mono font-bold text-indigo-900">{b.batch_code}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{b.delivery_area} Hub</td>
+                          <td className="py-3 px-4 font-bold text-slate-900">{Number(b.total_quantity_kg).toFixed(1)} kg</td>
+                          <td className="py-3 px-4">{b.total_orders_count} customer order(s)</td>
+                          <td className="py-3 px-4">{b.stops ? b.stops.length : 0} stops</td>
+                          <td className="py-3 px-4 font-extrabold text-emerald-600">₹{Number(b.estimated_logistics_cost || 0).toFixed(0)}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              b.status === 'DELIVERED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : b.status === 'BATCH_CREATED'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-sky-100 text-sky-800'
+                            }`}>
+                              {b.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Logistics Optimizer Section */}

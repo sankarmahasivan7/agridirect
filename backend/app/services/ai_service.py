@@ -42,43 +42,142 @@ def _load_price_model():
     return _price_model_cache
 
 
-def get_demand_forecast(product_name: str, category_name: str, location: Optional[str] = None) -> dict:
-    bundle = _load_demand_model()
-    if bundle is None:
+def get_demand_forecast(
+    product_name: str,
+    category_name: str,
+    location: Optional[str] = None,
+    db: Optional[Session] = None,
+) -> dict:
+    """
+    Uses historical order/demand data from the database to predict future demand.
+    Enforces strict data integrity:
+    - If insufficient historical data (< 3 records), returns:
+      "Not enough historical data for reliable forecasting."
+    - Never fabricates fake predictions.
+    - Calculates:
+      * ACTUAL SUPPLY (from active database listings)
+      * AI FORECAST (predicted future demand)
+      * POTENTIAL SUPPLY GAP (max(0, forecast - supply))
+    """
+    from app.models.models import Order, OrderItem, BulkRequirement, DemandData, ProductListing, Product
+
+    # 1. Collect real historical order & demand data points
+    historical_quantities = []
+    current_supply = 0.0
+
+    if db is not None:
+        # A. Actual completed/placed orders
+        order_items = (
+            db.query(OrderItem.quantity)
+            .join(ProductListing, OrderItem.listing_id == ProductListing.id)
+            .join(Product, ProductListing.product_id == Product.id)
+            .filter(Product.name.ilike(product_name))
+            .all()
+        )
+        historical_quantities.extend([float(q[0]) for q in order_items if q[0] is not None])
+
+        # B. Bulk procurement requirements
+        bulk_reqs = (
+            db.query(BulkRequirement.required_quantity)
+            .join(Product, BulkRequirement.product_id == Product.id)
+            .filter(Product.name.ilike(product_name))
+            .all()
+        )
+        historical_quantities.extend([float(q[0]) for q in bulk_reqs if q[0] is not None])
+
+        # C. Recorded demand points
+        demand_rows = (
+            db.query(DemandData.demand_quantity)
+            .join(Product, DemandData.product_id == Product.id)
+            .filter(Product.name.ilike(product_name))
+            .all()
+        )
+        historical_quantities.extend([float(q[0]) for q in demand_rows if q[0] is not None])
+
+        # D. Current active supply in database
+        active_listings = (
+            db.query(ProductListing.quantity_available)
+            .join(Product, ProductListing.product_id == Product.id)
+            .filter(Product.name.ilike(product_name), ProductListing.is_active == True)  # noqa: E712
+            .all()
+        )
+        current_supply = sum(float(q[0]) for q in active_listings if q[0] is not None)
+
+    # 2. Strict Data Sufficiency Check:
+    # If fewer than 3 historical data points, do NOT fabricate data
+    if len(historical_quantities) < 3:
         return {
             "available": False,
-            "note": "Not enough historical data to generate a forecast. Train the demand model first.",
+            "has_sufficient_data": False,
+            "historical_points_count": len(historical_quantities),
+            "status_message": "Not enough historical data for reliable forecasting.",
+            "note": "Not enough historical data for reliable forecasting.",
+            "forecast_quantity": 0.0,
+            "ai_forecast": None,
+            "actual_supply": round(current_supply, 2),
+            "potential_supply_gap": None,
+            "trend": "UNKNOWN",
+            "forecast_change_percent": None,
+            "label": "AI FORECAST",
         }
 
-    model = bundle["model"]
+    # 3. Sufficient historical data available: Compute forecast
     target_date = date.today() + timedelta(days=7)
+    bundle = _load_demand_model()
 
-    row = pd.DataFrame([{
-        "month": target_date.month,
-        "day_of_week": target_date.weekday(),
-        "day_of_year": target_date.timetuple().tm_yday,
-        "price": 0,  # unknown at forecast time; model treats as neutral input
-        "prev_week_demand": 0,
-        "prev_month_demand": 0,
-        "product_name": product_name,
-        "category": category_name,
-        "location": location or "Chennai",
-        "is_festival": False,
-    }])
+    if bundle is not None:
+        model = bundle["model"]
+        row = pd.DataFrame([{
+            "month": target_date.month,
+            "day_of_week": target_date.weekday(),
+            "day_of_year": target_date.timetuple().tm_yday,
+            "price": 0,
+            "prev_week_demand": float(historical_quantities[-1]) if historical_quantities else 0,
+            "prev_month_demand": sum(historical_quantities) / len(historical_quantities),
+            "product_name": product_name,
+            "category": category_name,
+            "location": location or "Local Region",
+            "is_festival": False,
+        }])
+        predicted = float(model.predict(row)[0])
+    else:
+        # Moving weighted average from actual historical data points
+        weights = [1.0 + (i * 0.15) for i in range(len(historical_quantities))]
+        predicted = sum(q * w for q, w in zip(historical_quantities, weights)) / sum(weights)
 
-    predicted = float(model.predict(row)[0])
+    predicted_qty = max(1.0, round(predicted, 2))
+    gap = max(0.0, round(predicted_qty - current_supply, 2))
+
+    if current_supply > 0:
+        change_pct = round(((predicted_qty - current_supply) / current_supply) * 100, 1)
+        trend = "HIGH" if change_pct > 10 else ("LOW" if change_pct < -10 else "STABLE")
+    else:
+        change_pct = None
+        trend = "HIGH" if predicted_qty > 0 else "STABLE"
 
     metrics = {}
     if DEMAND_METRICS_PATH.exists():
-        metrics = json.loads(DEMAND_METRICS_PATH.read_text())
+        try:
+            metrics = json.loads(DEMAND_METRICS_PATH.read_text())
+        except Exception:
+            pass
 
     return {
         "available": True,
-        "forecast_quantity": round(predicted, 2),
+        "has_sufficient_data": True,
+        "historical_points_count": len(historical_quantities),
+        "status_message": f"Forecast computed from {len(historical_quantities)} historical demand points.",
+        "forecast_quantity": predicted_qty,
+        "ai_forecast": predicted_qty,
+        "actual_supply": round(current_supply, 2),
+        "potential_supply_gap": gap,
         "target_date": target_date.isoformat(),
+        "trend": trend,
+        "forecast_change_percent": change_pct,
         "mae": metrics.get("mae"),
         "rmse": metrics.get("rmse"),
         "r2": metrics.get("r2"),
+        "label": "AI FORECAST",
     }
 
 
@@ -129,7 +228,7 @@ def get_price_recommendation(db: Session, listing: ProductListing) -> dict:
     Returns a recommended RANGE, never a single overriding number, and never
     touches listing.price_per_unit.
     """
-    forecast = get_demand_forecast(listing.product.name, listing.product.category.name, listing.location)
+    forecast = get_demand_forecast(listing.product.name, listing.product.category.name, listing.location, db=db)
     forecast_qty = forecast.get("forecast_quantity") if forecast.get("available") else None
 
     market = _predict_market_price(listing.product.name, listing.product.category.name, listing.location, forecast_qty)
@@ -180,12 +279,29 @@ def get_price_recommendation(db: Session, listing: ProductListing) -> dict:
                 f"({current_supply} units), suggesting some softening."
             )
 
-    recommended_min = Decimal(str(round(base_price * (1 + adjustment - 0.03), 2)))
-    recommended_max = Decimal(str(round(base_price * (1 + adjustment + 0.05), 2)))
+    # Perishability management signal
+    from app.services.perishability_service import get_perishability_ai_recommendation
+    perish = get_perishability_ai_recommendation(listing)
+    if perish["recommended_discount_percent"] > 0:
+        disc = perish["recommended_discount_percent"] / 100.0
+        adjustment -= disc
+        reasoning_parts.append(perish["recommended_action"])
+
+    recommended_min = Decimal(str(round(base_price * max(0.1, 1 + adjustment - 0.03), 2)))
+    recommended_max = Decimal(str(round(base_price * max(0.15, 1 + adjustment + 0.05), 2)))
+
+    sell_by = listing.get_expected_sell_by_date()
 
     return {
         "recommended_min": recommended_min,
         "recommended_max": recommended_max,
+        "recommended_range_str": f"₹{recommended_min}–₹{recommended_max}/{listing.unit}",
+        "label": "AI RECOMMENDATION",
+        "price_autonomy_guarantee": "The AI recommendation never automatically changes the farmer's price. You maintain 100% price autonomy.",
         "reasoning": " ".join(reasoning_parts),
         "source": source,
+        "perishability_status": perish["status"],
+        "expected_sell_by_date": sell_by,
+        "recommended_action": perish["recommended_action"],
+        "eligible_channels": perish["eligible_channels"],
     }

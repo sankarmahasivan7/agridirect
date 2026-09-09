@@ -1,12 +1,17 @@
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.models import (
-    User, RoleEnum, ProductListing, Product, Category, FarmerProfile, FPOProfile
+    User, RoleEnum, ProductListing, Product, Category, FarmerProfile, FPOProfile, OrderItem
 )
 from app.schemas.schemas import ListingCreate, ListingUpdate, ListingOut
+from app.services.perishability_service import check_and_notify_perishability
 
 router = APIRouter(prefix="/api/listings", tags=["listings"])
 
@@ -27,7 +32,34 @@ def _get_or_create_product(db: Session, product_name: str, category_name: str, u
     return product
 
 
-def _serialize(listing: ProductListing) -> ListingOut:
+def _serialize(
+    listing: ProductListing,
+    distance_km: Optional[Decimal] = None,
+    recommended_strategy: Optional[str] = None,
+) -> ListingOut:
+    sell_by = listing.get_expected_sell_by_date()
+    days_left = (sell_by - date.today()).days if sell_by else None
+    status = listing.calculate_perishability_status()
+    channels = listing.get_eligible_channels()
+
+    # Real farmer rating & review count
+    farmer_rating = None
+    farmer_review_count = 0
+    if listing.farmer and getattr(listing.farmer, "reviews", None):
+        f_revs = listing.farmer.reviews
+        farmer_review_count = len(f_revs)
+        if farmer_review_count > 0:
+            farmer_rating = round(sum(r.rating for r in f_revs) / farmer_review_count, 1)
+
+    # Real product/listing rating
+    prod_rating = None
+    prod_review_count = 0
+    if getattr(listing, "reviews", None):
+        l_revs = listing.reviews
+        prod_review_count = len(l_revs)
+        if prod_review_count > 0:
+            prod_rating = round(sum(r.rating for r in l_revs) / prod_review_count, 1)
+
     return ListingOut(
         id=listing.id,
         product_name=listing.product.name,
@@ -44,8 +76,21 @@ def _serialize(listing: ProductListing) -> ListingOut:
         location=listing.location,
         min_order_quantity=listing.min_order_quantity,
         is_perishable=listing.is_perishable,
+        shelf_life_days=listing.shelf_life_days,
+        expected_sell_by_date=sell_by,
+        perishability_level=listing.perishability_level,
+        storage_requirement=listing.storage_requirement,
+        perishability_status=status,
+        days_remaining=days_left,
+        eligible_channels=channels,
         is_active=listing.is_active,
+        distance_km=distance_km,
+        recommended_strategy=recommended_strategy,
         created_at=listing.created_at,
+        farmer_rating=farmer_rating,
+        farmer_review_count=farmer_review_count,
+        product_rating=prod_rating,
+        product_review_count=prod_review_count,
     )
 
 
@@ -61,6 +106,12 @@ def create_listing(
     """
     product = _get_or_create_product(db, payload.product_name, payload.category_name, payload.unit)
 
+    expected_sell_by = payload.expected_sell_by_date
+    if not expected_sell_by and payload.is_perishable:
+        base = payload.harvest_date or date.today()
+        life = payload.shelf_life_days or 7
+        expected_sell_by = base + timedelta(days=life)
+
     listing = ProductListing(
         product_id=product.id,
         quantity_available=payload.quantity_available,
@@ -74,6 +125,8 @@ def create_listing(
         min_order_quantity=payload.min_order_quantity or 0,
         is_perishable=payload.is_perishable,
         shelf_life_days=payload.shelf_life_days,
+        expected_sell_by_date=expected_sell_by,
+        perishability_level=payload.perishability_level or "HIGH",
         storage_requirement=payload.storage_requirement,
         certification_info=payload.certification_info,
         image_url=payload.image_url,
@@ -86,6 +139,7 @@ def create_listing(
     db.add(listing)
     db.commit()
     db.refresh(listing)
+    check_and_notify_perishability(db, listing)
     return _serialize(listing)
 
 
@@ -102,7 +156,11 @@ def my_listings(
         q = q.filter(ProductListing.farmer_id == user.farmer_profile.id)
     else:
         q = q.filter(ProductListing.fpo_id == user.fpo_profile.id)
-    return [_serialize(listing) for listing in q.order_by(ProductListing.created_at.desc()).all()]
+    listings = q.order_by(ProductListing.created_at.desc()).all()
+    for l in listings:
+        if l.is_active:
+            check_and_notify_perishability(db, l)
+    return [_serialize(l) for l in listings]
 
 
 def _get_owned_listing(db: Session, listing_id: int, user: User) -> ProductListing:
@@ -139,5 +197,10 @@ def delete_listing(
     user: User = Depends(require_role(RoleEnum.farmer, RoleEnum.fpo)),
 ):
     listing = _get_owned_listing(db, listing_id, user)
-    db.delete(listing)
-    db.commit()
+    has_orders = db.query(OrderItem).filter(OrderItem.listing_id == listing_id).first() is not None
+    if has_orders:
+        listing.is_active = False
+        db.commit()
+    else:
+        db.delete(listing)
+        db.commit()

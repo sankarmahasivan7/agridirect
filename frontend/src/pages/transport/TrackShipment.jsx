@@ -15,14 +15,30 @@ import {
 } from 'lucide-react'
 
 const STATUS_CONFIG = {
-  REQUESTED: { label: 'Requested (Searching Vehicle)', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  PENDING: { label: 'Order Confirmed (Matching Transporter)', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  REQUESTED: { label: 'Requested (Matching Transporter)', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  ACCEPTED: { label: 'Transporter Accepted', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
   ASSIGNED: { label: 'Vehicle Assigned', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
-  IN_TRANSIT: { label: 'In Transit', badge: 'badge-transit' },
+  PICKUP: { label: 'Picked Up from Warehouse', badge: 'bg-purple-50 text-purple-700 border-purple-200' },
+  IN_TRANSIT: { label: 'In Transit to Destination', badge: 'badge-transit' },
   DELIVERED: { label: 'Delivered', badge: 'badge-actual' },
   CANCELLED: { label: 'Cancelled', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
 }
 
-const TRACKING_STAGES = ['REQUESTED', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED']
+const TRACKING_STEPS = [
+  { key: 'CONFIRMED', label: 'Order Confirmed', statuses: ['PENDING', 'REQUESTED'] },
+  { key: 'ASSIGNED', label: 'Carrier Assigned', statuses: ['ASSIGNED', 'ACCEPTED'] },
+  { key: 'IN_TRANSIT', label: 'In Transit', statuses: ['PICKUP', 'IN_TRANSIT'] },
+  { key: 'DELIVERED', label: 'Delivered', statuses: ['DELIVERED'] },
+]
+
+function getStageIndex(status) {
+  if (['PENDING', 'REQUESTED'].includes(status)) return 0
+  if (['ASSIGNED', 'ACCEPTED'].includes(status)) return 1
+  if (['PICKUP', 'IN_TRANSIT'].includes(status)) return 2
+  if (['DELIVERED'].includes(status)) return 3
+  return -1
+}
 
 function timeAgo(isoString) {
   if (!isoString) return 'recently'
@@ -80,7 +96,7 @@ export default function TrackShipment() {
 
   const vehicle = request.assigned_vehicle
   const hasLocation = vehicle && vehicle.current_latitude != null && vehicle.current_longitude != null
-  const currentStageIndex = TRACKING_STAGES.indexOf(request.status)
+  const currentStageIndex = getStageIndex(request.status)
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -123,12 +139,12 @@ export default function TrackShipment() {
         {request.status !== 'CANCELLED' && currentStageIndex !== -1 && (
           <div className="py-2">
             <div className="grid grid-cols-4 text-center text-xs font-semibold text-slate-500 mb-2 gap-1">
-              {TRACKING_STAGES.map((stg, sIdx) => {
+              {TRACKING_STEPS.map((stg, sIdx) => {
                 const isDone = sIdx <= currentStageIndex
                 const isCurrent = sIdx === currentStageIndex
 
                 return (
-                  <div key={stg} className="flex flex-col items-center">
+                  <div key={stg.key} className="flex flex-col items-center">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mb-1 transition-all ${
                       isCurrent
                         ? 'bg-leaf-600 text-white ring-4 ring-leaf-100 scale-110'
@@ -139,7 +155,7 @@ export default function TrackShipment() {
                       {isDone ? <CheckCircle2 className="w-4 h-4" /> : sIdx + 1}
                     </div>
                     <span className={`text-[11px] truncate max-w-full ${isCurrent ? 'text-leaf-800 font-bold' : isDone ? 'text-slate-700' : 'text-slate-400'}`}>
-                      {stg.replace(/_/g, ' ')}
+                      {stg.label}
                     </span>
                   </div>
                 )
@@ -148,7 +164,7 @@ export default function TrackShipment() {
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-leaf-600 rounded-full transition-all duration-500" 
-                style={{ width: `${((currentStageIndex + 1) / TRACKING_STAGES.length) * 100}%` }}
+                style={{ width: `${((currentStageIndex + 1) / TRACKING_STEPS.length) * 100}%` }}
               />
             </div>
           </div>
@@ -161,7 +177,7 @@ export default function TrackShipment() {
               <MapPin className="w-4 h-4" />
             </div>
             <div>
-              <span className="label text-[10px] mb-0.5">Pickup Location</span>
+              <span className="label text-[10px] mb-0.5">Pickup Location (District Warehouse)</span>
               <p className="text-sm font-bold text-slate-900">{request.pickup_location}</p>
             </div>
           </div>

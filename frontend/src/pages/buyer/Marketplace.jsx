@@ -1,247 +1,313 @@
 import React, { useEffect, useState } from 'react'
 import { browseMarketplace } from '../../services/api.js'
 import ListingCard from '../../components/ListingCard.jsx'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 import { 
   Search, 
-  Filter, 
-  X, 
-  SlidersHorizontal, 
   MapPin, 
   RotateCcw, 
-  Sparkles,
-  ShoppingBag,
-  ArrowUpDown
+  ShoppingBag, 
+  ArrowUpDown, 
+  Zap, 
+  Check, 
+  Building2,
+  ChevronDown,
+  Filter
 } from 'lucide-react'
 
-const CATEGORIES = [
-  'All',
-  'Vegetables',
-  'Fruits',
-  'Dairy',
-  'Rice',
-  'Wheat',
-  'Pulses',
-  'Spices',
-  'Other'
+const DEPARTMENTS = [
+  { key: 'All', labelEn: 'All Departments', labelTa: 'அனைத்து பிரிவுகள்' },
+  { key: 'Vegetables', labelEn: 'Vegetables', labelTa: 'காய்கறிகள்' },
+  { key: 'Fruits', labelEn: 'Fruits', labelTa: 'பழங்கள்' },
+  { key: 'Dairy', labelEn: 'Dairy', labelTa: 'பால் பண்ணை' },
+  { key: 'Rice', labelEn: 'Rice & Grains', labelTa: 'அரிசி / தானியங்கள்' },
+  { key: 'Wheat', labelEn: 'Wheat & Flour', labelTa: 'கோதுமை' },
+  { key: 'Pulses', labelEn: 'Pulses & Lentils', labelTa: 'பருப்பு வகைகள்' },
+  { key: 'Spices', labelEn: 'Spices & Herbs', labelTa: 'மசாலா பொருட்கள்' },
+  { key: 'Other', labelEn: 'Other Farm Crops', labelTa: 'பிற பயிர்கள்' },
+]
+
+const DISTRICT_HUBS = [
+  { key: 'All', name: 'All 3 Districts', hub: 'All District Warehouses' },
+  { key: 'Tenkasi', name: 'Tenkasi', hub: 'Tenkasi Central Warehouse' },
+  { key: 'Tirunelveli', name: 'Tirunelveli', hub: 'Tirunelveli Central Warehouse' },
+  { key: 'Thoothukudi', name: 'Thoothukudi', hub: 'Thoothukudi Central Warehouse' },
 ]
 
 export default function Marketplace() {
+  const { t, language } = useLanguage()
   const [listings, setListings] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [selectedDepartment, setSelectedDepartment] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
-  const [locationQuery, setLocationQuery] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
-  const [sortBy, setSortBy] = useState('newest') // newest, price_low, price_high, qty_high
+  const [selectedDistrict, setSelectedDistrict] = useState('All')
+  const [inStockOnly, setInStockOnly] = useState(false)
+  const [sortBy, setSortBy] = useState('featured') // featured, price_low, price_high, rating, nearest, newest
+  const [buyerCoords, setBuyerCoords] = useState(null)
+  const [channel, setChannel] = useState('consumer')
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setBuyerCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+        },
+        () => {},
+        { timeout: 5000 }
+      )
+    }
+  }, [])
 
   const load = (params = {}) => {
     setLoading(true)
-    browseMarketplace(params)
+    const p = { ...params }
+    if (buyerCoords) {
+      p.buyer_lat = buyerCoords.lat
+      p.buyer_lon = buyerCoords.lon
+    }
+    if (channel) {
+      p.channel = channel
+    }
+    browseMarketplace(p)
       .then((res) => setListings(res.data))
+      .catch((err) => console.error(err))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     const params = {}
-    if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory
+    if (selectedDepartment && selectedDepartment !== 'All') params.category = selectedDepartment
     if (searchQuery.trim()) params.q = searchQuery.trim()
-    if (locationQuery.trim()) params.location = locationQuery.trim()
+    if (selectedDistrict && selectedDistrict !== 'All') params.location = selectedDistrict
     load(params)
-  }, [selectedCategory])
+  }, [selectedDepartment, selectedDistrict, buyerCoords, channel])
 
   const handleSearchSubmit = (e) => {
     e.preventDefault()
     const params = {}
-    if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory
+    if (selectedDepartment && selectedDepartment !== 'All') params.category = selectedDepartment
     if (searchQuery.trim()) params.q = searchQuery.trim()
-    if (locationQuery.trim()) params.location = locationQuery.trim()
+    if (selectedDistrict && selectedDistrict !== 'All') params.location = selectedDistrict
     load(params)
   }
 
   const handleReset = () => {
     setSearchQuery('')
-    setLocationQuery('')
-    setSelectedCategory('All')
-    setSortBy('newest')
+    setSelectedDepartment('All')
+    setSelectedDistrict('All')
+    setInStockOnly(false)
+    setSortBy('featured')
     load({})
   }
 
-  // Client-side sorting for responsive UX
-  const sortedListings = [...listings].sort((a, b) => {
+  // Filter in-stock and client-side sorting
+  const filteredListings = listings.filter((l) => {
+    if (inStockOnly && Number(l.quantity_available) <= 0) return false
+    return true
+  })
+
+  const sortedListings = [...filteredListings].sort((a, b) => {
     if (sortBy === 'price_low') return Number(a.price_per_unit) - Number(b.price_per_unit)
     if (sortBy === 'price_high') return Number(b.price_per_unit) - Number(a.price_per_unit)
-    if (sortBy === 'qty_high') return Number(b.quantity_available) - Number(a.quantity_available)
-    return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    if (sortBy === 'rating') {
+      const rateA = a.quality_grade === 'Grade A' ? 5 : 4
+      const rateB = b.quality_grade === 'Grade B' ? 5 : 4
+      return rateB - rateA
+    }
+    if (sortBy === 'nearest') {
+      const distA = a.distance_km != null ? Number(a.distance_km) : Infinity
+      const distB = b.distance_km != null ? Number(b.distance_km) : Infinity
+      return distA - distB
+    }
+    if (sortBy === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    // 'featured': prioritizes fresh, verified, then id
+    return (b.id || 0) - (a.id || 0)
   })
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Direct Marketplace</h1>
-            <span className="badge-actual">Live Supply</span>
+      {/* Top Amazon-Style Subheader / Deliver-To Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 text-white px-4 py-2.5 rounded-2xl mb-6 shadow-md">
+        <div className="flex items-center gap-2 text-xs">
+          <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+          <div>
+            <span className="text-slate-400 block text-[10px]">Deliver to</span>
+            <span className="font-bold text-slate-100">
+              {selectedDistrict !== 'All' ? `${selectedDistrict} District Hub` : 'Tenkasi, Tirunelveli & Thoothukudi Hubs'}
+            </span>
           </div>
-          <p className="text-slate-500 text-sm mt-1">
-            Browse real harvests directly listed by verified farmers and FPOs. 100% of price goes to growers.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 shadow-2xs">
-            <ShoppingBag className="w-4 h-4 text-leaf-600" />
-            <span>{listings.length} {listings.length === 1 ? 'Product' : 'Products'} Available</span>
-          </div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="inline-flex items-center gap-1.5 text-amber-300 font-semibold">
+            <Zap className="w-3.5 h-3.5 fill-amber-300" />
+            100% Warehouse Fulfilled
+          </span>
+          <span className="hidden sm:inline text-slate-400">|</span>
+          <span className="hidden sm:inline text-slate-300 font-medium">
+            Zero Middleman Markup
+          </span>
         </div>
       </div>
 
-      {/* Unified Search & Filters Bar */}
-      <div className="card p-4 mb-6 border border-slate-200/80 shadow-soft">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row gap-3">
+      {/* Amazon-Style Main Search Bar */}
+      <div className="mb-6">
+        <form onSubmit={handleSearchSubmit} className="flex rounded-2xl shadow-soft border-2 border-slate-200 focus-within:border-amber-500 overflow-hidden bg-white transition-all">
           
-          {/* Main search */}
-          <div className="relative flex-1">
-            <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
+          {/* Department Dropdown */}
+          <div className="relative border-r border-slate-200 bg-slate-100/90 hover:bg-slate-200/90 transition">
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className="appearance-none bg-transparent pl-3 pr-8 py-3.5 text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+            >
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept.key} value={dept.key}>
+                  {language === 'ta' ? dept.labelTa : dept.labelEn}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-4 pointer-events-none" />
+          </div>
+
+          {/* Search Input */}
+          <div className="relative flex-1 flex items-center">
             <input
-              className="input pl-11 text-sm"
-              placeholder="Search produce (e.g. Tomato, Milk, Onion, Wheat)…"
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search AgriDirect produce (e.g. Tomatoes, Fresh Spinach, Groundnuts, Milk)..."
+              className="w-full py-3.5 px-4 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
           </div>
 
-          {/* Location input */}
-          <div className="relative w-full lg:w-64">
-            <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-            <input
-              className="input pl-10 text-sm"
-              placeholder="Filter by city/region…"
-              value={locationQuery}
-              onChange={(e) => setLocationQuery(e.target.value)}
-            />
-            {locationQuery && (
-              <button
-                type="button"
-                onClick={() => setLocationQuery('')}
-                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-2">
-            <button className="btn-primary py-2.5 px-5 text-sm font-semibold whitespace-nowrap" type="submit">
-              Search
-            </button>
-
-            {(searchQuery || locationQuery || selectedCategory !== 'All') && (
-              <button
-                type="button"
-                onClick={handleReset}
-                title="Reset all filters"
-                className="btn-secondary py-2.5 px-3 text-slate-500 hover:text-slate-800"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
+          {/* Search CTA Button in Amazon Golden Orange */}
+          <button
+            type="submit"
+            className="bg-[#febd69] hover:bg-[#f3a847] text-slate-900 px-6 sm:px-8 py-3.5 font-extrabold text-sm flex items-center justify-center gap-2 transition-colors shrink-0"
+          >
+            <Search className="w-4 h-4 text-slate-900" />
+            <span className="hidden sm:inline">Search</span>
+          </button>
         </form>
+      </div>
 
-        {/* Category Pills Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 mt-4 pt-3 border-t border-slate-100 no-scrollbar">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">Category:</span>
-          {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat
+      {/* District Hub Filter Chips & Options Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200">
+        
+        {/* District Hub Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Building2 className="w-3.5 h-3.5 text-slate-400" /> Hub:
+          </span>
+          {DISTRICT_HUBS.map((hub) => {
+            const isSelected = selectedDistrict === hub.key
             return (
               <button
-                key={cat}
+                key={hub.key}
                 type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                onClick={() => setSelectedDistrict(hub.key)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border ${
                   isSelected
-                    ? 'bg-leaf-600 text-white shadow-sm shadow-leaf-600/30'
-                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                 }`}
               >
-                {cat}
+                {hub.name}
               </button>
             )
           })}
         </div>
 
-      </div>
+        {/* Right Filter & Sort Controls */}
+        <div className="flex items-center gap-4 text-xs font-medium">
+          {/* In-Stock Toggle */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={inStockOnly}
+              onChange={(e) => setInStockOnly(e.target.checked)}
+              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+            />
+            <span className="text-slate-700 font-semibold">In Stock Only</span>
+          </label>
 
-      {/* Sort & Quick Meta Controls */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <p className="text-xs text-slate-500 font-medium">
-          Showing <span className="font-bold text-slate-800">{sortedListings.length}</span> live listing(s)
-        </p>
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 hidden sm:inline">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+            >
+              <option value="featured">Featured</option>
+              <option value="price_low">Price: Low to High</option>
+              <option value="price_high">Price: High to Low</option>
+              <option value="rating">Avg. Customer Review</option>
+              <option value="nearest">Nearest District Warehouse</option>
+              <option value="newest">Newest Harvests</option>
+            </select>
+          </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-500 font-semibold flex items-center gap-1">
-            <ArrowUpDown className="w-3.5 h-3.5" /> Sort by:
-          </span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-leaf-500/20"
-          >
-            <option value="newest">Latest Listings</option>
-            <option value="price_low">Price: Low to High</option>
-            <option value="price_high">Price: High to Low</option>
-            <option value="qty_high">Highest Quantity Available</option>
-          </select>
+          {(searchQuery || selectedDepartment !== 'All' || selectedDistrict !== 'All' || inStockOnly) && (
+            <button
+              onClick={handleReset}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+
       </div>
 
-      {/* Product Grid / Loading / Empty State */}
+      {/* Results Count Header */}
+      <div className="flex items-center justify-between mb-5 text-xs text-slate-500">
+        <p>
+          Showing <span className="font-bold text-slate-900">{sortedListings.length}</span> results in{' '}
+          <span className="font-semibold text-slate-800">
+            {selectedDepartment === 'All' ? 'All Departments' : selectedDepartment}
+          </span>
+          {selectedDistrict !== 'All' && ` (${selectedDistrict} Hub)`}
+        </p>
+      </div>
+
+      {/* Product Grid / Empty State */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <div key={n} className="card p-0 overflow-hidden border border-slate-200/80">
-              <div className="h-20 skeleton" />
-              <div className="p-5 space-y-3">
-                <div className="h-5 w-3/4 skeleton rounded-lg" />
-                <div className="h-4 w-1/2 skeleton rounded-lg" />
-                <div className="h-16 w-full skeleton rounded-xl" />
-                <div className="h-9 w-full skeleton rounded-xl" />
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            <div key={n} className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
+              <div className="h-6 w-1/3 skeleton rounded-full" />
+              <div className="h-6 w-3/4 skeleton rounded-lg" />
+              <div className="h-4 w-1/2 skeleton rounded-md" />
+              <div className="h-10 w-full skeleton rounded-xl" />
+              <div className="h-8 w-full skeleton rounded-xl" />
             </div>
           ))}
         </div>
       ) : sortedListings.length === 0 ? (
-        <div className="card text-center py-20 border-dashed border-2 border-slate-200 bg-white">
-          <div className="w-16 h-16 rounded-2xl bg-leaf-50 border border-leaf-100 flex items-center justify-center text-leaf-600 mx-auto mb-4">
+        <div className="bg-white rounded-3xl text-center py-20 border-dashed border-2 border-slate-200 p-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto mb-4">
             <ShoppingBag className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-1">No products match your search</h3>
+          <h3 className="text-xl font-extrabold text-slate-800 mb-1">
+            No matching produce found
+          </h3>
           <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">
-            Try adjusting your search keywords, clearing location filters, or exploring another category.
+            Try checking your spelling, selecting "All Departments", or exploring our supported district warehouses in Tenkasi, Tirunelveli, and Thoothukudi.
           </p>
           <button
             onClick={handleReset}
-            className="btn-secondary text-xs py-2 px-4 shadow-2xs inline-flex items-center gap-2"
+            className="btn-primary py-2 px-5 text-xs shadow-sm inline-flex items-center gap-2"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Reset All Filters
+            Reset Filters
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {sortedListings.map((l) => (
             <ListingCard key={l.id} listing={l} />
           ))}
@@ -251,4 +317,3 @@ export default function Marketplace() {
     </div>
   )
 }
-

@@ -37,6 +37,7 @@ export default function BuyerRegister() {
     email: '', 
     phone: '', 
     password: '', 
+    district: 'Tenkasi',
     location: '',
     default_latitude: null, 
     default_longitude: null,
@@ -95,9 +96,9 @@ export default function BuyerRegister() {
               <div className="sm:col-span-2">
                 <label className="label">Contact / Full Name *</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
                     placeholder="e.g. Priya Sundaram"
                     value={form.full_name}
@@ -118,9 +119,9 @@ export default function BuyerRegister() {
               <div>
                 <label className="label">Business / Firm Name (Optional)</label>
                 <div className="relative">
-                  <Building2 className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Building2 className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     placeholder="e.g. Annapurna Fresh Kitchen"
                     value={form.business_name}
                     onChange={set('business_name')}
@@ -139,9 +140,9 @@ export default function BuyerRegister() {
               <div>
                 <label className="label">Email Address *</label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     type="email"
                     required
                     placeholder="priya@example.com"
@@ -154,9 +155,9 @@ export default function BuyerRegister() {
               <div>
                 <label className="label">Mobile Number *</label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
                     placeholder="e.g. 9876543210"
                     value={form.phone}
@@ -168,9 +169,9 @@ export default function BuyerRegister() {
               <div className="sm:col-span-2">
                 <label className="label">Password (min 8 chars) *</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10 pr-10"
+                    className="input !pl-10 !pr-10"
                     type={showPassword ? 'text' : 'password'}
                     minLength={8}
                     required
@@ -181,20 +182,38 @@ export default function BuyerRegister() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="label">Default Delivery Street Address</label>
+              <div>
+                <label className="label">Operating District *</label>
+                <select
+                  className="input font-medium bg-white"
+                  required
+                  value={form.district}
+                  onChange={set('district')}
+                >
+                  <option value="Tenkasi">Tenkasi (தென்காசி)</option>
+                  <option value="Tirunelveli">Tirunelveli (திருநெல்வேலி)</option>
+                  <option value="Thoothukudi">Thoothukudi (தூத்துக்குடி)</option>
+                </select>
+                <p className="text-[11px] text-sky-700 mt-1 font-medium">
+                  ✓ Serviced by district central warehouse
+                </p>
+              </div>
+
+              <div>
+                <label className="label">Default Delivery Street Address *</label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <MapPin className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
-                    placeholder="e.g. 14 Main Road, KK Nagar, Madurai"
+                    className="input !pl-10"
+                    required
+                    placeholder="e.g. 14 Market Road, Tenkasi"
                     value={form.location}
                     onChange={set('location')}
                   />

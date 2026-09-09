@@ -35,6 +35,7 @@ export default function TransporterRegister() {
     email: '', 
     password: '',
     license_number: '', 
+    district: 'Tenkasi',
     base_location: '',
     vehicle_name: '', 
     vehicle_number: '', 
@@ -95,9 +96,9 @@ export default function TransporterRegister() {
               <div className="sm:col-span-2">
                 <label className="label">Full Name *</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
                     placeholder="e.g. Murugan Velu"
                     value={form.full_name}
@@ -109,9 +110,9 @@ export default function TransporterRegister() {
               <div>
                 <label className="label">Driving License Number *</label>
                 <div className="relative">
-                  <FileText className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <FileText className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
                     placeholder="e.g. TN-72-20180001234"
                     value={form.license_number}
@@ -121,13 +122,30 @@ export default function TransporterRegister() {
               </div>
 
               <div>
-                <label className="label">Base City / Operating Hub *</label>
+                <label className="label">Operating District (Warehouse Zone) *</label>
+                <select
+                  className="input font-medium bg-white"
+                  required
+                  value={form.district}
+                  onChange={set('district')}
+                >
+                  <option value="Tenkasi">Tenkasi (தென்காசி)</option>
+                  <option value="Tirunelveli">Tirunelveli (திருநெல்வேலி)</option>
+                  <option value="Thoothukudi">Thoothukudi (தூத்துக்குடி)</option>
+                </select>
+                <p className="text-[11px] text-sky-700 mt-1 font-medium">
+                  ✓ Dispatch assignments originate from this district warehouse
+                </p>
+              </div>
+
+              <div>
+                <label className="label">Base Town / Vehicle Stand *</label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <MapPin className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
-                    placeholder="e.g. Tenkasi / Tirunelveli"
+                    placeholder="e.g. Tenkasi Market Stand"
                     value={form.base_location}
                     onChange={set('base_location')}
                   />
@@ -145,9 +163,9 @@ export default function TransporterRegister() {
               <div>
                 <label className="label">Mobile Number *</label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     required
                     placeholder="e.g. 9876543210"
                     value={form.phone}
@@ -159,9 +177,9 @@ export default function TransporterRegister() {
               <div>
                 <label className="label">Email Address *</label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     type="email"
                     required
                     placeholder="murugan@example.com"
@@ -174,9 +192,9 @@ export default function TransporterRegister() {
               <div className="sm:col-span-2">
                 <label className="label">Account Password (min 8 chars) *</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    className="input pl-10 pr-10"
+                    className="input !pl-10 !pr-10"
                     type={showPassword ? 'text' : 'password'}
                     minLength={8}
                     required
@@ -187,7 +205,7 @@ export default function TransporterRegister() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -234,19 +252,32 @@ export default function TransporterRegister() {
               </div>
 
               <div>
-                <label className="label flex items-center gap-1">
-                  <Scale className="w-3.5 h-3.5 text-sky-600" />
-                  Payload Capacity (kg) *
+                <label className="label flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Scale className="w-3.5 h-3.5 text-sky-600" />
+                    Payload Capacity (kg) *
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {form.vehicle_type.toLowerCase().includes('two-wheeler') || form.vehicle_type.toLowerCase().includes('bike')
+                      ? 'Bike (Max 50 kg)'
+                      : 'Truck (35% min fill for dispatch)'}
+                  </span>
                 </label>
                 <input
                   className="input"
                   type="number"
-                  min="50"
+                  min="1"
+                  max={form.vehicle_type.toLowerCase().includes('two-wheeler') || form.vehicle_type.toLowerCase().includes('bike') ? 50 : undefined}
                   required
-                  placeholder="e.g. 1000"
+                  placeholder={form.vehicle_type.toLowerCase().includes('two-wheeler') || form.vehicle_type.toLowerCase().includes('bike') ? "e.g. 50" : "e.g. 500"}
                   value={form.capacity_kg}
                   onChange={set('capacity_kg')}
                 />
+                <p className="text-[11px] mt-1 text-slate-500 leading-tight">
+                  {form.vehicle_type.toLowerCase().includes('two-wheeler') || form.vehicle_type.toLowerCase().includes('bike')
+                    ? '🛵 Bike Rule: Max 50 kg. Dispatched immediately for small loads (no 35% minimum fill requirement).'
+                    : `🚛 Truck Rule: Requires ≥35% capacity to dispatch${form.capacity_kg ? ` (min ${(Number(form.capacity_kg) * 0.35).toFixed(1)} kg)` : ''}. Under-35% batches wait for compatible orders.`}
+                </p>
               </div>
             </div>
           </div>

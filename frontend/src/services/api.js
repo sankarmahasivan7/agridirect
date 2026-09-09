@@ -23,11 +23,11 @@ api.interceptors.response.use(
 
 // ---- Auth ----
 export const registerFarmer = (data) => api.post('/api/auth/register/farmer', data)
-export const registerFPO = (data) => api.post('/api/auth/register/fpo', data)
 export const registerBuyer = (data) => api.post('/api/auth/register/buyer', data)
 export const login = (data) => api.post('/api/auth/login', data)
+export const getMe = () => api.get('/api/auth/me')
 
-// ---- Listings (farmer/fpo) ----
+// ---- Listings (farmer) ----
 export const createListing = (data) => api.post('/api/listings', data)
 export const myListings = () => api.get('/api/listings/mine')
 export const updateListing = (id, data) => api.put(`/api/listings/${id}`, data)
@@ -44,11 +44,23 @@ export const sellerOrders = () => api.get('/api/orders/seller')
 export const updateOrderStatus = (id, newStatus) =>
   api.put(`/api/orders/${id}/status`, null, { params: { new_status: newStatus } })
 
+// ---- Payments ----
+export const verifyPayment = (data) => api.post('/api/payments/verify', data)
+export const confirmQrPayment = (data) => api.post('/api/payments/confirm-qr', data)
+export const failPayment = (data) => api.post('/api/payments/fail', data)
+export const collectCodPayment = (orderId) => api.post(`/api/payments/orders/${orderId}/collect-cod`)
+export const getOrderSettlement = (orderId) => api.get(`/api/payments/orders/${orderId}/settlement`)
+
 // ---- Transport ----
 export const registerTransporter = (data) => api.post('/api/auth/register/transporter', data)
 export const createTransportRequest = (data) => api.post('/api/transport', data)
 export const myTransportRequests = () => api.get('/api/transport/requests/mine')
 export const assignedTransportRequests = () => api.get('/api/transport/requests/assigned')
+export const availableTransportJobs = () => api.get('/api/transport/jobs/available')
+export const myTransportJobs = () => api.get('/api/transport/jobs/mine')
+export const acceptTransportJob = (id) => api.post(`/api/transport/jobs/${id}/accept`)
+export const updateTransportJobStatus = (id, newStatus) =>
+  api.put(`/api/transport/jobs/${id}/status`, null, { params: { new_status: newStatus } })
 export const updateTransportStatus = (id, newStatus) =>
   api.put(`/api/transport/requests/${id}/status`, null, { params: { new_status: newStatus } })
 export const updateVehicleLocation = (data) => api.put('/api/transport/vehicle/location', data)
@@ -66,9 +78,44 @@ export const getPriceRecommendation = (listingId) =>
 // ---- Dashboards ----
 export const farmerDashboard = () => api.get('/api/dashboard/farmer')
 export const buyerDashboard = () => api.get('/api/dashboard/buyer')
-export const fpoDashboard = () => api.get('/api/dashboard/fpo')
 export const adminDashboard = () => api.get('/api/dashboard/admin')
 
-// ---- Logistics ----
+// ---- Logistics & Route Optimization ----
 export const optimizeLogistics = (vehicleCapacityKg) =>
   api.post('/api/logistics/optimize', null, { params: { vehicle_capacity_kg: vehicleCapacityKg } })
+export const getOptimizedRoutes = (params) =>
+  api.get('/api/transport/optimize-routes', { params })
+export const getAiRouteOptimization = (params) =>
+  api.get('/api/ai/route-optimization', { params })
+
+// ---- Notifications ----
+export const getNotifications = (limit = 50) => api.get('/api/notifications', { params: { limit } })
+export const getUnreadNotificationCount = () => api.get('/api/notifications/unread-count')
+export const markNotificationRead = (id) => api.put(`/api/notifications/${id}/read`)
+export const markAllNotificationsRead = () => api.put('/api/notifications/read-all')
+
+// ---- Batched Delivery & 3PL Allocation ----
+export const triggerAutoBatch = (deliveryDistrict) =>
+  api.post('/api/batches/auto-batch', null, { params: { delivery_district: deliveryDistrict } })
+export const listBatches = (params) => api.get('/api/batches', { params })
+export const availableBatches = () => api.get('/api/batches/available')
+export const myBatches = () => api.get('/api/batches/mine')
+export const batchDetail = (id) => api.get(`/api/batches/${id}`)
+export const acceptBatch = (id) => api.post(`/api/batches/${id}/accept`)
+export const updateBatchStatus = (id, newStatus) =>
+  api.put(`/api/batches/${id}/status`, null, { params: { new_status: newStatus } })
+export const batchAdminStats = () => api.get('/api/batches/admin/stats')
+
+// ---- Customer Feedback, Ratings & Photo Upload ----
+export const submitReview = (formData) =>
+  api.post('/api/reviews', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+export const getOrderReviews = (orderId) => api.get(`/api/reviews/order/${orderId}`)
+export const getFarmerReviews = (farmerId) => api.get(`/api/reviews/farmer/${farmerId}`)
+export const getListingReviews = (listingId) => api.get(`/api/reviews/listing/${listingId}`)
+export const getProductReviews = (productId) => api.get(`/api/reviews/product/${productId}`)
+export const getFarmerReviewsSummary = () => api.get('/api/reviews/farmer-summary')
+export const getMyReviews = () => api.get('/api/reviews/mine')
+
+

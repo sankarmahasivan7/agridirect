@@ -1,9 +1,9 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from '../context/LanguageContext.jsx'
 import { 
   Sprout, 
   ShoppingBag, 
-  Building2, 
   Truck, 
   ShieldCheck, 
   ArrowRight, 
@@ -12,80 +12,79 @@ import {
   Cpu, 
   Navigation,
   DollarSign,
-  Layers
+  Layers,
+  Sparkles
 } from 'lucide-react'
 
-const roles = [
-  {
-    key: 'farmer',
-    label: 'Farmer',
-    badge: 'Producers',
-    desc: 'List your harvest directly, eliminate commission agents, and access AI price and demand intelligence.',
-    icon: Sprout,
-    gradient: 'from-emerald-500 to-leaf-600',
-    border: 'hover:border-emerald-300',
-    bg: 'bg-emerald-50/50',
-    iconColor: 'text-emerald-600',
-    features: ['Direct farmer-set pricing', 'Real-time demand forecasts', 'Automatic transport assignment'],
-  },
-  {
-    key: 'buyer',
-    label: 'Buyer',
-    badge: 'Consumers & Bulk',
-    desc: 'Source fresh produce directly from verified farmers and FPOs with zero undisclosed markups.',
-    icon: ShoppingBag,
-    gradient: 'from-blue-500 to-cyan-600',
-    border: 'hover:border-blue-300',
-    bg: 'bg-blue-50/50',
-    iconColor: 'text-blue-600',
-    features: ['Farm-origin traceability', 'Transparent fee breakdown', 'Bulk procurement matching'],
-  },
-  {
-    key: 'fpo',
-    label: 'FPO / Cooperatives',
-    badge: 'Aggregators',
-    desc: 'Aggregate member farmers’ harvests into commercial volumes and negotiate fair institutional deals.',
-    icon: Building2,
-    gradient: 'from-amber-500 to-orange-600',
-    border: 'hover:border-amber-300',
-    bg: 'bg-amber-50/50',
-    iconColor: 'text-amber-600',
-    features: ['Member supply pooling', 'Multi-farmer listings', 'Direct logistics booking'],
-  },
-  {
-    key: 'transporter',
-    label: 'Transporter',
-    badge: 'Fleet & Drivers',
-    desc: 'Receive auto-matched shipments that fit your vehicle capacity and share real-time GPS tracking.',
-    icon: Truck,
-    gradient: 'from-purple-500 to-indigo-600',
-    border: 'hover:border-purple-300',
-    bg: 'bg-purple-50/50',
-    iconColor: 'text-purple-600',
-    features: ['Capacity-based matching', 'Real-time GPS trip updates', 'Fair, guaranteed trip pay'],
-  },
-  {
-    key: 'admin',
-    label: 'Platform Admin',
-    badge: 'Operations',
-    desc: 'Monitor ecosystem health, verify participants, analyze GMV, and trigger AI logistics optimization.',
-    icon: ShieldCheck,
-    gradient: 'from-rose-500 to-pink-600',
-    border: 'hover:border-rose-300',
-    bg: 'bg-rose-50/50',
-    iconColor: 'text-rose-600',
-    features: ['Real-time GMV analytics', 'Vehicle route optimizer', 'System audit & transparency'],
-  },
-]
-
-const stats = [
-  { label: 'Middleman Markup', value: '0%', sub: 'Direct farmer-to-buyer', icon: DollarSign },
-  { label: 'Price Transparency', value: '100%', sub: 'Separated farmer & freight pay', icon: CheckCircle2 },
-  { label: 'AI Forecasting', value: 'Real-time', sub: 'Demand & fair rate advisory', icon: Cpu },
-  { label: 'Logistics Fleet', value: 'GPS Live', sub: 'Route-optimized delivery', icon: Navigation },
-]
-
 export default function Landing() {
+  const { t, language } = useLanguage()
+
+  const stats = [
+    { label: t('landing.statZero', 'Middleman Brokerage'), value: '0%', sub: t('landing.statZeroSub', 'Fair pricing for both sides'), icon: DollarSign },
+    { label: t('landing.statDirect', 'Direct to Farmer'), value: '100%', sub: t('landing.statDirectSub', 'Full grower price realization'), icon: CheckCircle2 },
+    { label: t('landing.statAi', 'Honest AI Models'), value: 'Real-time', sub: t('landing.statAiSub', 'Real mandi market intelligence'), icon: Cpu },
+    { label: t('landing.statGps', 'Live GPS Fleet'), value: 'Live', sub: t('landing.statGpsSub', 'OpenStreetMap driver telemetry'), icon: Navigation },
+  ]
+
+  const roles = [
+    {
+      key: 'farmer',
+      label: t('roles.farmer', 'Farmer'),
+      badge: language === 'ta' ? 'உற்பத்தியாளர்' : 'Producers',
+      desc: t('landing.farmerDesc', 'List your harvest directly, eliminate commission agents, and access AI price and demand intelligence.'),
+      icon: Sprout,
+      gradient: 'from-emerald-500 to-leaf-600',
+      border: 'hover:border-emerald-300',
+      bg: 'bg-emerald-50/50',
+      iconColor: 'text-emerald-600',
+      features: language === 'ta' 
+        ? ['உழவர் நிர்ணயிக்கும் நேரடி விலை', 'உடனடி தேவை முன்னறிவிப்பு', 'தானியங்கி சரக்கு வாகனம் ஒதுக்கீடு']
+        : ['Direct farmer-set pricing', 'Real-time demand forecasts', 'Automatic transport assignment'],
+    },
+    {
+      key: 'buyer',
+      label: t('roles.buyer', 'Buyer'),
+      badge: language === 'ta' ? 'நுகர்வோர் & மொத்த வியாபாரி' : 'Consumers & Bulk',
+      desc: t('landing.buyerDesc', 'Source fresh produce directly from verified farmers with zero undisclosed markups.'),
+      icon: ShoppingBag,
+      gradient: 'from-blue-500 to-cyan-600',
+      border: 'hover:border-blue-300',
+      bg: 'bg-blue-50/50',
+      iconColor: 'text-blue-600',
+      features: language === 'ta'
+        ? ['பண்ணை இருப்பிட நம்பகத்தன்மை', 'வெளிப்படையான விலை ரசீது', 'மொத்த கொள்முதல் பொருத்தம்']
+        : ['Farm-origin traceability', 'Transparent fee breakdown', 'Bulk procurement matching'],
+    },
+    {
+      key: 'transporter',
+      label: t('roles.transporter', 'Transporter'),
+      badge: language === 'ta' ? 'சரக்கு & ஓட்டுநர்கள்' : 'Fleet & Drivers',
+      desc: t('landing.transporterDesc', 'Receive auto-matched shipments that fit your vehicle capacity and share real-time GPS tracking.'),
+      icon: Truck,
+      gradient: 'from-purple-500 to-indigo-600',
+      border: 'hover:border-purple-300',
+      bg: 'bg-purple-50/50',
+      iconColor: 'text-purple-600',
+      features: language === 'ta'
+        ? ['வாகன அளவுக்கு ஏற்ற சவாரி', 'நேரடி ஜிபிஎஸ் வழித்தட தகவல்', 'நியாயமான உத்தரவாத கட்டணம்']
+        : ['Capacity-based matching', 'Real-time GPS trip updates', 'Fair, guaranteed trip pay'],
+    },
+    {
+      key: 'admin',
+      label: t('roles.admin', 'Administrator'),
+      badge: language === 'ta' ? 'தள நிர்வாகம்' : 'Operations',
+      desc: t('landing.adminDesc', 'Monitor ecosystem health, verify participants, analyze GMV, and trigger AI logistics optimization.'),
+      icon: ShieldCheck,
+      gradient: 'from-rose-500 to-pink-600',
+      border: 'hover:border-rose-300',
+      bg: 'bg-rose-50/50',
+      iconColor: 'text-rose-600',
+      features: language === 'ta'
+        ? ['உடனடி GMV விற்பனை புள்ளிவிவரம்', 'வாகன வழித்தட உகப்பாக்கம் (VRP)', 'தள வெளிப்படைத்தன்மை தணிக்கை']
+        : ['Real-time GMV analytics', 'Vehicle route optimizer', 'System audit & transparency'],
+    },
+  ]
+
   return (
     <div className="min-h-screen">
       
@@ -97,28 +96,29 @@ export default function Landing() {
           
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 backdrop-blur-sm border border-leaf-200/80 shadow-2xs text-xs font-bold text-leaf-800 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
             <span className="flex h-2 w-2 rounded-full bg-leaf-500 animate-ping" />
-            Direct Agriculture Commerce Platform & AI Intelligence
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            {t('landing.pill', 'Ethical Direct Agricultural Commerce')}
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight max-w-4xl mx-auto leading-tight sm:leading-tight lg:leading-tight">
-            Connecting Farmers Directly with Buyers —{' '}
+            {t('landing.heroTitle', 'Direct Farm-to-Table')} —{' '}
             <span className="bg-gradient-to-r from-leaf-700 via-emerald-600 to-teal-600 bg-clip-text text-transparent">
-              Without Middlemen.
+              {language === 'ta' ? 'இடைத்தரகர் இல்லாமல்.' : 'Without Middlemen.'}
             </span>
           </h1>
 
           <p className="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Transparent farmer-set prices, AI-driven demand forecasting, and automated, trackable GPS logistics for a fair agricultural supply chain.
+            {t('landing.heroSubtitle', 'Eliminate middlemen. Connect farmers directly with buyers, institutions, and verified fleet logistics powered by honest AI pricing.')}
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/buyer/marketplace" className="btn-primary py-3.5 px-6 text-base shadow-md">
               <ShoppingBag className="w-5 h-5" />
-              Explore Marketplace
+              {t('landing.exploreMarketplace', 'Explore Marketplace')}
             </Link>
             <Link to="/farmer/register" className="btn-secondary py-3.5 px-6 text-base shadow-2xs">
               <Sprout className="w-5 h-5 text-leaf-600" />
-              Register as Farmer
+              {t('landing.registerAsFarmer', 'Join as a Farmer')}
             </Link>
           </div>
 
@@ -150,13 +150,13 @@ export default function Landing() {
           
           <div className="text-center max-w-2xl mx-auto mb-14">
             <span className="text-xs font-bold uppercase tracking-widest text-leaf-700 bg-leaf-50 px-3 py-1 rounded-full border border-leaf-200/50">
-              Role-Based Access
+              {language === 'ta' ? 'பயனர் பிரிவுகள்' : 'Role-Based Access'}
             </span>
             <h2 className="text-3xl font-extrabold text-slate-900 mt-3">
-              Choose Your Platform Workspace
+              {t('landing.rolesTitle', 'Built for the Entire Agricultural Ecosystem')}
             </h2>
             <p className="text-slate-500 text-sm mt-2">
-              Each portal provides dedicated workflows tailored specifically for farmers, institutional buyers, transport fleets, and aggregators.
+              {t('landing.rolesSubtitle', 'Select your role to access specialized portals, intelligent pricing, and logistics routing.')}
             </p>
           </div>
 
@@ -203,7 +203,7 @@ export default function Landing() {
                       to={`/${r.key}/login`}
                       className="btn-primary w-full py-2.5 text-sm justify-center group/btn"
                     >
-                      <span>{r.label} Sign In</span>
+                      <span>{r.label} {t('landing.signInRole', 'Sign In')}</span>
                       <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                     </Link>
 
@@ -212,7 +212,7 @@ export default function Landing() {
                         to={`/${r.key}/register`}
                         className="btn-secondary w-full py-2 text-xs justify-center font-medium"
                       >
-                        Create New {r.label} Account
+                        {t('landing.registerRole', 'Register')} {r.label}
                       </Link>
                     )}
                   </div>
@@ -227,25 +227,35 @@ export default function Landing() {
       {/* Trust & Transparency Feature Highlight */}
       <section className="py-16 bg-slate-50 border-t border-slate-200/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h2 className="text-2xl font-bold text-slate-900">
+              {t('landing.trustTitle', 'The AgriDirect AI Integrity Architecture')}
+            </h2>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             <div className="card p-6 bg-white border-slate-200">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 mb-4">
                 <Layers className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Honest Price Architecture</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {t('landing.trust1Title', 'Zero Synthetic Inventory')}
+              </h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                The farmer receives 100% of their listed price. Logistics and platform fees are itemized transparently at checkout so both farmer and buyer see exact numbers.
+                {t('landing.trust1Desc', 'We never fabricate ghost listings or fictitious supply. Every listed item represents physical crops ready for harvest.')}
               </p>
             </div>
 
             <div className="card p-6 bg-white border-slate-200">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 mb-4">
-                <Cpu className="w-5 h-5" />
+                <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">AI Demand & Price Intelligence</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {t('landing.trust2Title', 'Honest Distance Lock')}
+              </h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Machine learning models analyze historical patterns and seasonality to recommend fair market price ranges and forecast upcoming buyer demand without ever altering farmer listings.
+                {t('landing.trust2Desc', 'Deliveries enforce calculated highway transit time locks to prevent fraudulent remote delivery confirmations.')}
               </p>
             </div>
 
@@ -253,9 +263,11 @@ export default function Landing() {
               <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 mb-4">
                 <Navigation className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Automated Fleet Matching</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {t('landing.trust3Title', 'Transparent Fee Architecture')}
+              </h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                When buyers place orders, vehicles with matching weight capacity are instantly assigned based on proximity, complete with live GPS position tracking and route estimation.
+                {t('landing.trust3Desc', 'Buyers see the exact breakdown: 100% direct farmer payout, verified transport carrier fee, and a flat 2% platform maintenance fee.')}
               </p>
             </div>
 
@@ -268,10 +280,13 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-center gap-2 mb-2 font-bold text-white text-base">
             <Sprout className="w-5 h-5 text-leaf-500" />
-            AgriDirect AI Platform
+            {t('nav.brand', 'AgriDirect')} AI Platform
           </div>
-          <p className="text-slate-500">
-            Empowering direct farmer livelihoods through fair commerce, real demand intelligence, and honest logistics.
+          <p className="text-slate-500 max-w-xl mx-auto">
+            {t('landing.footerTagline', 'Empowering India’s agrarian backbone through direct trade and transparent AI intelligence.')}
+          </p>
+          <p className="text-slate-600 text-[11px] mt-2">
+            © 2026 AgriDirect AI. {t('landing.rightsReserved', 'All rights reserved.')}
           </p>
         </div>
       </footer>
@@ -279,4 +294,5 @@ export default function Landing() {
     </div>
   )
 }
+
 

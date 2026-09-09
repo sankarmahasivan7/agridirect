@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.core.deps import require_role
 from app.models.models import (
     User, RoleEnum, ProductListing, Order, OrderItem, OrderStatusEnum,
-    Transaction, FarmerProfile, FPOProfile, BuyerProfile, Notification
+    Transaction, FarmerProfile, FPOProfile, BuyerProfile, Notification, Review
 )
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -45,11 +45,59 @@ def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require
     else:
         earnings_summary = {"gross": str(gross), "net_earnings": str(round(net_earnings, 2))}
 
+    from app.services.perishability_service import check_and_notify_perishability
+    urgent_lots = []
+    for l in active_listings:
+        st = l.calculate_perishability_status()
+        if st in ["SELL SOON", "URGENT", "CRITICAL"]:
+            check_and_notify_perishability(db, l)
+            urgent_lots.append({
+                "listing_id": l.id,
+                "product_name": l.product.name,
+                "quantity": float(l.quantity_available),
+                "unit": l.unit,
+                "status": st,
+                "sell_by_date": l.get_expected_sell_by_date().isoformat() if l.get_expected_sell_by_date() else None,
+            })
+
+    reviews = (
+        db.query(Review)
+        .options(joinedload(Review.buyer), joinedload(Review.product))
+        .filter(Review.farmer_id == farmer_id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+    total_reviews = len(reviews)
+    avg_rating = round(sum(r.rating for r in reviews) / total_reviews, 1) if total_reviews > 0 else 0.0
+    waste_reports = [r for r in reviews if r.is_waste_reported]
+    recent_reviews = [
+        {
+            "id": r.id,
+            "order_id": r.order_id,
+            "buyer_name": r.buyer.full_name if r.buyer else "Verified Buyer",
+            "product_name": r.product_name or (r.product.name if r.product else "Produce Item"),
+            "rating": r.rating,
+            "comment": r.comment,
+            "image_url": r.image_url,
+            "is_waste_reported": r.is_waste_reported,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in reviews[:10]
+    ]
+
     return {
         "active_listings_count": len(active_listings),
         "total_listings_count": len(listings),
         "pending_orders_count": len(pending_orders),
         "earnings": earnings_summary,
+        "perishability_alerts": urgent_lots,
+        "urgent_listings_count": len(urgent_lots),
+        "rating_summary": {
+            "average_rating": avg_rating,
+            "total_reviews": total_reviews,
+            "waste_reports_count": len(waste_reports),
+            "recent_reviews": recent_reviews,
+        },
         "note": "All values are computed from actual listings and orders." if listings or items else
                 "No listings or orders yet.",
     }
@@ -89,8 +137,8 @@ def fpo_dashboard(db: Session = Depends(get_db), user: User = Depends(require_ro
 def admin_dashboard(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.admin))):
     total_users = db.query(User).count()
     farmers = db.query(User).filter(User.role == RoleEnum.farmer).count()
-    fpos = db.query(User).filter(User.role == RoleEnum.fpo).count()
     buyers = db.query(User).filter(User.role == RoleEnum.buyer).count()
+    transporters = db.query(User).filter(User.role == RoleEnum.transporter).count()
 
     active_listings = db.query(ProductListing).filter(ProductListing.is_active == True).count()  # noqa: E712
 
@@ -104,8 +152,8 @@ def admin_dashboard(db: Session = Depends(get_db), user: User = Depends(require_
     return {
         "total_users": total_users,
         "farmers": farmers,
-        "fpos": fpos,
         "buyers": buyers,
+        "transporters": transporters,
         "active_listings": active_listings,
         "total_orders": len(orders),
         "gmv": str(gmv),
