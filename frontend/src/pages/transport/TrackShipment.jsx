@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { trackTransportRequest } from '../../services/api.js'
+import GoogleMapTracker from '../../components/GoogleMapTracker.jsx'
 import { 
   Truck, 
   MapPin, 
@@ -218,9 +219,9 @@ export default function TrackShipment() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Truck className="w-5 h-5 text-purple-600" />
-            <h2 className="text-lg font-bold text-slate-900">Vehicle & GPS Position</h2>
+            <h2 className="text-lg font-bold text-slate-900">Google Maps Live Tracking</h2>
           </div>
-          <span className="badge-actual">Hardware GPS Feed</span>
+          <span className="badge-actual">Google Maps Satellite & Telemetry</span>
         </div>
 
         {!vehicle ? (
@@ -254,17 +255,19 @@ export default function TrackShipment() {
               )}
             </div>
 
-            {/* Interactive OpenStreetMap Container */}
+            {/* Real Interactive Google Maps Tracking */}
             {hasLocation ? (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative" style={{ height: 360 }}>
-                <iframe
-                  title="Live vehicle location"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(vehicle.current_longitude) - 0.02}%2C${Number(vehicle.current_latitude) - 0.02}%2C${Number(vehicle.current_longitude) + 0.02}%2C${Number(vehicle.current_latitude) + 0.02}&layer=mapnik&marker=${vehicle.current_latitude}%2C${vehicle.current_longitude}`}
-                />
-              </div>
+              <GoogleMapTracker
+                vehicle={vehicle}
+                pickupLocation={request.pickup_location}
+                pickupLat={request.pickup_latitude}
+                pickupLng={request.pickup_longitude}
+                destinationLocation={request.destination_location}
+                destinationLat={request.destination_latitude}
+                destinationLng={request.destination_longitude}
+                status={request.status}
+                height={440}
+              />
             ) : (
               <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
                 <Navigation className="w-8 h-8 text-slate-300 mx-auto mb-2" />
