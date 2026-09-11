@@ -12,7 +12,8 @@ import {
   RotateCw, 
   AlertCircle,
   Package,
-  Calendar
+  Calendar,
+  ExternalLink
 } from 'lucide-react'
 
 const STATUS_CONFIG = {
@@ -183,14 +184,32 @@ export default function TrackShipment() {
             </div>
           </div>
 
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
-              <Navigation className="w-4 h-4" />
+          <div className="flex items-start justify-between gap-2.5 p-3 rounded-xl bg-purple-50/70 border border-purple-100">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="label text-[10px] mb-0.5 text-rose-700 font-extrabold uppercase">Buyer Destination Drop</span>
+                <p className="text-sm font-bold text-slate-900">{request.destination_location}</p>
+              </div>
             </div>
-            <div>
-              <span className="label text-[10px] mb-0.5">Delivery Destination</span>
-              <p className="text-sm font-bold text-slate-900">{request.destination_location}</p>
-            </div>
+            {request.destination_location && (
+              <a
+                href={
+                  request.destination_latitude && request.destination_longitude
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${request.destination_latitude},${request.destination_longitude}`
+                    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(request.destination_location + ', Tamil Nadu, India')}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>Navigate</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </div>
         </div>
 
@@ -224,18 +243,9 @@ export default function TrackShipment() {
           <span className="badge-actual">Google Maps Satellite & Telemetry</span>
         </div>
 
-        {!vehicle ? (
-          <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <Truck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="font-bold text-slate-700 text-sm">Awaiting Transporter Assignment</p>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-              Vehicles with suitable capacity are auto-matched based on proximity to the pickup point.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            
-            {/* Vehicle meta banner */}
+        <div className="space-y-4">
+          {/* Vehicle meta banner or assignment status */}
+          {vehicle ? (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-purple-50/50 border border-purple-100 rounded-xl gap-2">
               <div>
                 <p className="font-bold text-slate-900 text-sm">
@@ -244,7 +254,7 @@ export default function TrackShipment() {
                 <p className="text-xs text-slate-500">{vehicle.vehicle_type} · Capacity: {Number(vehicle.capacity_kg)} kg</p>
               </div>
 
-              {hasLocation && (
+              {hasLocation ? (
                 <div className="text-xs sm:text-right">
                   <span className="text-purple-900 font-semibold flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-purple-600 animate-ping" />
@@ -252,38 +262,36 @@ export default function TrackShipment() {
                   </span>
                   <span className="text-slate-400 text-[11px]">Updated {timeAgo(vehicle.location_updated_at)}</span>
                 </div>
+              ) : (
+                <div className="text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 font-medium">
+                  Transporter assigned · Live GPS active once trip commences
+                </div>
               )}
             </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center justify-between">
+              <span className="font-medium">Matching nearest transporter. Showing planned route & buyer destination:</span>
+              <span className="text-amber-900 font-bold">{request.destination_location}</span>
+            </div>
+          )}
 
-            {/* Real Interactive Google Maps Tracking */}
-            {hasLocation ? (
-              <GoogleMapTracker
-                vehicle={vehicle}
-                pickupLocation={request.pickup_location}
-                pickupLat={request.pickup_latitude}
-                pickupLng={request.pickup_longitude}
-                destinationLocation={request.destination_location}
-                destinationLat={request.destination_latitude}
-                destinationLng={request.destination_longitude}
-                status={request.status}
-                height={440}
-              />
-            ) : (
-              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
-                <Navigation className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-600">No GPS Coordinates Transmitted Yet</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  The driver hasn't broadcasted their GPS position yet. The map will load automatically once shared.
-                </p>
-              </div>
-            )}
+          {/* Real Interactive Google Maps Tracking (Always Active) */}
+          <GoogleMapTracker
+            vehicle={vehicle}
+            pickupLocation={request.pickup_location}
+            pickupLat={request.pickup_latitude}
+            pickupLng={request.pickup_longitude}
+            destinationLocation={request.destination_location}
+            destinationLat={request.destination_latitude}
+            destinationLng={request.destination_longitude}
+            status={request.status}
+            height={460}
+          />
 
-            <p className="text-[11px] text-slate-400 text-center">
-              Tracking refreshes automatically every 15 seconds.
-            </p>
-
-          </div>
-        )}
+          <p className="text-[11px] text-slate-400 text-center">
+            Map route and live location refresh automatically every 15 seconds.
+          </p>
+        </div>
 
       </div>
 
