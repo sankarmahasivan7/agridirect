@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { 
   Truck, 
   MapPin, 
@@ -52,9 +52,18 @@ export default function GoogleMapTracker({
 }) {
   const mapContainerRef = useRef(null)
   const mapInstanceRef = useRef(null)
-  const markersRef = useRef([])
   const directionsRendererRef = useRef(null)
   const trafficLayerRef = useRef(null)
+
+  // Persistent marker references to avoid recreating / flickering
+  const pickupMarkerRef = useRef(null)
+  const destMarkerRef = useRef(null)
+  const vehicleMarkerRef = useRef(null)
+  const vehicleInfoWindowRef = useRef(null)
+
+  // Track if we already did initial fit to prevent infinite auto-zoom jumping
+  const hasFittedBoundsRef = useRef(false)
+  const lastRouteKeyRef = useRef('')
 
   const [mapLoaded, setMapLoaded] = useState(false)
   const [loadError, setLoadError] = useState(null)
@@ -63,12 +72,21 @@ export default function GoogleMapTracker({
   const [mapType, setMapType] = useState('roadmap')
   const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const vehicleCoords = vehicle && vehicle.current_latitude != null && vehicle.current_longitude != null
-    ? { lat: Number(vehicle.current_latitude), lng: Number(vehicle.current_longitude) }
-    : null
+  // Stable coordinate objects
+  const vehCoords = useMemo(() => {
+    if (vehicle && vehicle.current_latitude != null && vehicle.current_longitude != null) {
+      return { lat: Number(vehicle.current_latitude), lng: Number(vehicle.current_longitude) }
+    }
+    return null
+  }, [vehicle?.current_latitude, vehicle?.current_longitude])
 
-  const pickupCoords = resolveCoord(pickupLocation, pickupLat, pickupLng)
-  const destCoords = resolveCoord(destinationLocation, destinationLat, destinationLng)
+  const pickupCoords = useMemo(() => {
+    return resolveCoord(pickupLocation, pickupLat, pickupLng)
+  }, [pickupLocation, pickupLat, pickupLng])
+
+  const destCoords = useMemo(() => {
+    return resolveCoord(destinationLocation, destinationLat, destinationLng)
+  }, [destinationLocation, destinationLat, destinationLng])
 
   // 1. Load Google Maps JS API script once
   useEffect(() => {
@@ -94,11 +112,11 @@ export default function GoogleMapTracker({
     document.head.appendChild(script)
   }, [])
 
-  // 2. Initialize Google Map instance
+  // 2. Initialize Google Map instance once
   useEffect(() => {
     if (!mapLoaded || !mapContainerRef.current || !window.google?.maps) return
 
-    const initialCenter = vehicleCoords || pickupCoords || destCoords || { lat: 8.9594, lng: 77.3167 }
+    const initialCenter = vehCoords || pickupCoords || destCoords || { lat: 8.9594, lng: 77.3167 }
 
     if (!mapInstanceRef.current) {
       const map = new window.google.maps.Map(mapContainerRef.current, {
@@ -109,15 +127,20 @@ export default function GoogleMapTracker({
         streetViewControl: false,
         mapTypeControl: false,
         zoomControl: true,
+        gestureHandling: 'cooperative', // smooth, non-glitchy scroll
+        maxZoom: 18,
+        minZoom: 7,
       })
 
       mapInstanceRef.current = map
 
+      // IMPORTANT: preserveViewport: true prevents DirectionsRenderer from auto-zooming / jumping!
       directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
         map: map,
+        preserveViewport: true,
         suppressMarkers: true,
         polylineOptions: {
-          strokeColor: '#059669', // Emerald green route
+          strokeColor: '#059669', // Emerald green road route
           strokeWeight: 5,
           strokeOpacity: 0.85,
         }
@@ -127,167 +150,172 @@ export default function GoogleMapTracker({
     }
   }, [mapLoaded])
 
-  // 3. Render Markers & Driving Route
-  const updateMapLayers = useCallback(() => {
-    if (!mapInstanceRef.current || !window.google?.maps) return
+  // 3. Update Markers & Route stably
+  useEffect(() => {
+    if (!mapLoaded || !mapInstanceRef.current || !window.google?.maps) return
 
     const map = mapInstanceRef.current
-
-    // Clear old markers
-    markersRef.current.forEach(m => m.setMap(null))
-    markersRef.current = []
-
     const bounds = new window.google.maps.LatLngBounds()
     let hasPoints = false
 
-    // Marker A: Pickup Warehouse Hub
+    // --- Marker A: Pickup Hub ---
     if (pickupCoords) {
-      const pickupMarker = new window.google.maps.Marker({
-        position: pickupCoords,
-        map: map,
-        title: `Pickup: ${pickupLocation || 'Warehouse Hub'}`,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: '#10B981',
-          fillOpacity: 1,
-          strokeColor: '#FFFFFF',
-          strokeWeight: 2.5,
-        },
-        label: {
-          text: '🏭',
-          fontSize: '14px',
-        }
-      })
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="font-family: sans-serif; font-size: 12px; padding: 4px;">
-            <b style="color: #059669;">🏭 Pickup Warehouse Hub</b>
-            <p style="margin: 2px 0 0; color: #1E293B;">${pickupLocation || 'District Central Hub'}</p>
-          </div>
-        `
-      })
-      pickupMarker.addListener('click', () => infoWindow.open(map, pickupMarker))
-      markersRef.current.push(pickupMarker)
+      if (!pickupMarkerRef.current) {
+        pickupMarkerRef.current = new window.google.maps.Marker({
+          position: pickupCoords,
+          map: map,
+          title: `Pickup: ${pickupLocation || 'Warehouse Hub'}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#10B981',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2.5,
+          },
+          label: { text: '🏭', fontSize: '14px' }
+        })
+        const info = new window.google.maps.InfoWindow({
+          content: `
+            <div style="font-family: sans-serif; font-size: 12px; padding: 4px;">
+              <b style="color: #059669;">🏭 Pickup Warehouse Hub</b>
+              <p style="margin: 2px 0 0; color: #1E293B;">${pickupLocation || 'District Central Hub'}</p>
+            </div>
+          `
+        })
+        pickupMarkerRef.current.addListener('click', () => info.open(map, pickupMarkerRef.current))
+      } else {
+        pickupMarkerRef.current.setPosition(pickupCoords)
+      }
       bounds.extend(pickupCoords)
       hasPoints = true
     }
 
-    // Marker B: Destination Address
+    // --- Marker B: Destination Address ---
     if (destCoords) {
-      const destMarker = new window.google.maps.Marker({
-        position: destCoords,
-        map: map,
-        title: `Destination: ${destinationLocation || 'Customer Delivery'}`,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: '#3B82F6',
-          fillOpacity: 1,
-          strokeColor: '#FFFFFF',
-          strokeWeight: 2.5,
-        },
-        label: {
-          text: '📍',
-          fontSize: '14px',
-        }
-      })
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="font-family: sans-serif; font-size: 12px; padding: 4px;">
-            <b style="color: #2563EB;">📍 Delivery Destination</b>
-            <p style="margin: 2px 0 0; color: #1E293B;">${destinationLocation || 'Buyer Delivery Address'}</p>
-          </div>
-        `
-      })
-      destMarker.addListener('click', () => infoWindow.open(map, destMarker))
-      markersRef.current.push(destMarker)
+      if (!destMarkerRef.current) {
+        destMarkerRef.current = new window.google.maps.Marker({
+          position: destCoords,
+          map: map,
+          title: `Destination: ${destinationLocation || 'Customer Delivery'}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#3B82F6',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2.5,
+          },
+          label: { text: '📍', fontSize: '14px' }
+        })
+        const info = new window.google.maps.InfoWindow({
+          content: `
+            <div style="font-family: sans-serif; font-size: 12px; padding: 4px;">
+              <b style="color: #2563EB;">📍 Delivery Destination</b>
+              <p style="margin: 2px 0 0; color: #1E293B;">${destinationLocation || 'Buyer Delivery Address'}</p>
+            </div>
+          `
+        })
+        destMarkerRef.current.addListener('click', () => info.open(map, destMarkerRef.current))
+      } else {
+        destMarkerRef.current.setPosition(destCoords)
+      }
       bounds.extend(destCoords)
       hasPoints = true
     }
 
-    // Marker C: Live Carrier / Vehicle Position
-    if (vehicleCoords) {
+    // --- Marker C: Live Vehicle Position ---
+    if (vehCoords) {
       const isBike = (vehicle?.vehicle_type || '').toLowerCase().includes('bike')
-      const vehicleMarker = new window.google.maps.Marker({
-        position: vehicleCoords,
-        map: map,
-        title: `${vehicle?.name || 'Carrier'} (${vehicle?.vehicle_number || ''})`,
-        zIndex: 999,
-        icon: {
-          path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-          scale: 7,
-          fillColor: '#7C3AED',
-          fillOpacity: 1,
-          strokeColor: '#FFFFFF',
-          strokeWeight: 2.5,
-          rotation: 0,
-        },
-        label: {
-          text: isBike ? '🛵' : '🚚',
-          fontSize: '16px',
-        }
-      })
+      if (!vehicleMarkerRef.current) {
+        vehicleMarkerRef.current = new window.google.maps.Marker({
+          position: vehCoords,
+          map: map,
+          title: `${vehicle?.name || 'Carrier'} (${vehicle?.vehicle_number || ''})`,
+          zIndex: 999,
+          icon: {
+            path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+            scale: 7,
+            fillColor: '#7C3AED',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2.5,
+            rotation: 0,
+          },
+          label: { text: isBike ? '🛵' : '🚚', fontSize: '16px' }
+        })
 
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="font-family: sans-serif; font-size: 12px; padding: 6px;">
-            <b style="color: #6D28D9; font-size: 13px;">${vehicle?.name || 'Assigned Transporter'}</b>
-            <p style="margin: 2px 0; font-weight: 700; color: #1E293B;">${vehicle?.vehicle_number || ''}</p>
-            <p style="margin: 2px 0; color: #64748B;">${vehicle?.vehicle_type || 'Vehicle'} · Capacity: ${vehicle?.capacity_kg ? Number(vehicle.capacity_kg) + ' kg' : ''}</p>
-            <p style="margin: 4px 0 0; color: #059669; font-weight: 600;">● Live Telemetry: ${vehicle?.location_label || 'In Transit'}</p>
-          </div>
-        `
-      })
-      infoWindow.open(map, vehicleMarker)
-      vehicleMarker.addListener('click', () => infoWindow.open(map, vehicleMarker))
-      markersRef.current.push(vehicleMarker)
-      bounds.extend(vehicleCoords)
+        vehicleInfoWindowRef.current = new window.google.maps.InfoWindow({
+          content: `
+            <div style="font-family: sans-serif; font-size: 12px; padding: 6px;">
+              <b style="color: #6D28D9; font-size: 13px;">${vehicle?.name || 'Assigned Transporter'}</b>
+              <p style="margin: 2px 0; font-weight: 700; color: #1E293B;">${vehicle?.vehicle_number || ''}</p>
+              <p style="margin: 2px 0; color: #64748B;">${vehicle?.vehicle_type || 'Vehicle'} · Capacity: ${vehicle?.capacity_kg ? Number(vehicle.capacity_kg) + ' kg' : ''}</p>
+              <p style="margin: 4px 0 0; color: #059669; font-weight: 600;">● Live Telemetry: ${vehicle?.location_label || 'In Transit'}</p>
+            </div>
+          `
+        })
+
+        vehicleMarkerRef.current.addListener('click', () => {
+          vehicleInfoWindowRef.current.open(map, vehicleMarkerRef.current)
+        })
+      } else {
+        vehicleMarkerRef.current.setPosition(vehCoords)
+        // Update InfoWindow content without recreating
+        if (vehicleInfoWindowRef.current) {
+          vehicleInfoWindowRef.current.setContent(`
+            <div style="font-family: sans-serif; font-size: 12px; padding: 6px;">
+              <b style="color: #6D28D9; font-size: 13px;">${vehicle?.name || 'Assigned Transporter'}</b>
+              <p style="margin: 2px 0; font-weight: 700; color: #1E293B;">${vehicle?.vehicle_number || ''}</p>
+              <p style="margin: 2px 0; color: #64748B;">${vehicle?.vehicle_type || 'Vehicle'} · Capacity: ${vehicle?.capacity_kg ? Number(vehicle.capacity_kg) + ' kg' : ''}</p>
+              <p style="margin: 4px 0 0; color: #059669; font-weight: 600;">● Live Telemetry: ${vehicle?.location_label || 'In Transit'}</p>
+            </div>
+          `)
+        }
+      }
+      bounds.extend(vehCoords)
       hasPoints = true
     }
 
-    // Fit map bounds
-    if (hasPoints) {
+    // --- Auto-fit bounds ONLY ONCE on initial load ---
+    if (hasPoints && !hasFittedBoundsRef.current) {
       map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 })
+      hasFittedBoundsRef.current = true
     }
 
-    // 4. Calculate real road directions
-    const origin = vehicleCoords || pickupCoords
+    // --- Directions Service: Only request route if origin or destination actually changed ---
+    const origin = vehCoords || pickupCoords
     const destination = destCoords
 
     if (origin && destination && directionsRendererRef.current) {
-      const directionsService = new window.google.maps.DirectionsService()
-      directionsService.route(
-        {
-          origin: origin,
-          destination: destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, statusResult) => {
-          if (statusResult === window.google.maps.DirectionsStatus.OK && result) {
-            directionsRendererRef.current.setDirections(result)
-            const leg = result.routes[0]?.legs[0]
-            if (leg) {
-              setRouteInfo({
-                distanceText: leg.distance.text,
-                durationText: leg.duration.text,
-                startAddress: leg.start_address,
-                endAddress: leg.end_address,
-              })
+      const routeKey = `${origin.lat.toFixed(4)},${origin.lng.toFixed(4)}->${destination.lat.toFixed(4)},${destination.lng.toFixed(4)}`
+      if (routeKey !== lastRouteKeyRef.current) {
+        lastRouteKeyRef.current = routeKey
+        const directionsService = new window.google.maps.DirectionsService()
+        directionsService.route(
+          {
+            origin: origin,
+            destination: destination,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, statusResult) => {
+            if (statusResult === window.google.maps.DirectionsStatus.OK && result) {
+              directionsRendererRef.current.setDirections(result)
+              const leg = result.routes[0]?.legs[0]
+              if (leg) {
+                setRouteInfo({
+                  distanceText: leg.distance.text,
+                  durationText: leg.duration.text,
+                  startAddress: leg.start_address,
+                  endAddress: leg.end_address,
+                })
+              }
             }
           }
-        }
-      )
+        )
+      }
     }
-  }, [vehicleCoords, pickupCoords, destCoords, vehicle, pickupLocation, destinationLocation])
-
-  useEffect(() => {
-    if (mapLoaded) {
-      updateMapLayers()
-    }
-  }, [mapLoaded, updateMapLayers])
+  }, [mapLoaded, vehCoords, pickupCoords, destCoords, vehicle?.name, vehicle?.vehicle_number, vehicle?.location_label])
 
   const toggleTraffic = () => {
     if (!mapInstanceRef.current || !trafficLayerRef.current) return
@@ -307,14 +335,23 @@ export default function GoogleMapTracker({
     setMapType(nextType)
   }
 
+  // Recenter smoothly without jarring jumps
   const handleRecenter = () => {
     if (!mapInstanceRef.current) return
-    if (vehicleCoords) {
-      mapInstanceRef.current.panTo(vehicleCoords)
-      mapInstanceRef.current.setZoom(14)
+    const map = mapInstanceRef.current
+
+    if (vehCoords && destCoords) {
+      const bounds = new window.google.maps.LatLngBounds()
+      bounds.extend(vehCoords)
+      bounds.extend(destCoords)
+      if (pickupCoords) bounds.extend(pickupCoords)
+      map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 })
+    } else if (vehCoords) {
+      map.panTo(vehCoords)
+      map.setZoom(14)
     } else if (pickupCoords) {
-      mapInstanceRef.current.panTo(pickupCoords)
-      mapInstanceRef.current.setZoom(13)
+      map.panTo(pickupCoords)
+      map.setZoom(13)
     }
   }
 
@@ -327,13 +364,13 @@ export default function GoogleMapTracker({
             Google Maps Notice: Showing OpenStreetMap Live View.
           </span>
         </div>
-        {vehicleCoords && (
+        {vehCoords && (
           <iframe
             title="OpenStreetMap Fallback"
             width="100%"
             height="100%"
             style={{ border: 0 }}
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${vehicleCoords.lng - 0.02}%2C${vehicleCoords.lat - 0.02}%2C${vehicleCoords.lng + 0.02}%2C${vehicleCoords.lat + 0.02}&layer=mapnik&marker=${vehicleCoords.lat}%2C${vehicleCoords.lng}`}
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${vehCoords.lng - 0.02}%2C${vehCoords.lat - 0.02}%2C${vehCoords.lng + 0.02}%2C${vehCoords.lat + 0.02}&layer=mapnik&marker=${vehCoords.lat}%2C${vehCoords.lng}`}
           />
         )}
       </div>
@@ -371,7 +408,7 @@ export default function GoogleMapTracker({
         <button
           type="button"
           onClick={handleRecenter}
-          title="Recenter on Carrier"
+          title="Fit Route & Recenter"
           className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-md text-slate-700 hover:text-purple-600 shadow-md border border-slate-200/80 flex items-center justify-center transition active:scale-95"
         >
           <Compass className="w-4 h-4" />
