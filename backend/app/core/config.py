@@ -44,5 +44,9 @@ class Settings(BaseSettings):
     GOOGLE_MAPS_API_KEY: str | None = None
     ROUTING_PROVIDER: str = "auto"  # 'auto' (Google Maps if key present, else OSRM), 'google', 'osrm', 'haversine'
 
+    # Gemini AI Decision Layer & Voice Assistant
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-flash-latest"
+
 
 settings = Settings()

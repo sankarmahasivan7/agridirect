@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -612,5 +612,25 @@ class RatingSummaryOut(BaseModel):
     rating_breakdown: dict = {}
     waste_reports_count: int = 0
     reviews: List[ReviewOut] = []
+
+
+# ---------- Voice Assistant & AI Logistics Schemas ----------
+class VoiceInteractIn(BaseModel):
+    user_prompt: str
+    conversation_history: Optional[List[Dict[str, str]]] = None
+    language: Optional[str] = "en"
+
+
+class VoiceInteractOut(BaseModel):
+    response_text: str
+    language: str = "en"
+    user_role: str
+    actions_executed: List[Dict[str, Any]] = []
+    timestamp: str
+
+
+class RouteExplainIn(BaseModel):
+    route_plan: Dict[str, Any]
+
 
 

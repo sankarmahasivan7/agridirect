@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import Navbar from './components/Navbar.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import VoiceAssistant from './components/VoiceAssistant.jsx'
 
 import Landing from './pages/Landing.jsx'
 import RoleLogin from './pages/RoleLogin.jsx'
@@ -78,6 +79,7 @@ export default function App() {
         {/* Admin */}
         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
       </Routes>
+      <VoiceAssistant />
     </BrowserRouter>
   )
 }

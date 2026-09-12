@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,7 +8,12 @@ from app.core.deps import get_current_user
 from app.models.models import User, Product, ProductListing
 from app.services.ai_service import get_demand_forecast, get_price_recommendation
 from app.services.route_optimization_service import optimize_transport_routes
-from app.schemas.schemas import DemandForecastOut, PriceRecommendationOut, RouteOptimizationOut
+from app.services.gemini_service import process_ai_interaction
+from app.services.google_route_optimizer import plan_and_optimize_routes, explain_route_decision
+from app.schemas.schemas import (
+    DemandForecastOut, PriceRecommendationOut, RouteOptimizationOut,
+    VoiceInteractIn, VoiceInteractOut, RouteExplainIn
+)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -95,3 +100,62 @@ def route_optimization(
     If no real jobs exist in the database, returns an honest empty state.
     """
     return optimize_transport_routes(db, user, vehicle_id)
+
+
+@router.post("/voice/interact", response_model=VoiceInteractOut)
+def voice_assistant_interact(
+    payload: VoiceInteractIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Role-aware AI Voice Assistant interaction endpoint.
+    Processes voice or text requests through Gemini API decision layer with strictly validated tool calls.
+    Returns honest responses based on real database records in English or Tamil.
+    """
+    result = process_ai_interaction(
+        db=db,
+        user=user,
+        user_prompt=payload.user_prompt,
+        conversation_history=payload.conversation_history,
+        language=payload.language or "en",
+    )
+    return VoiceInteractOut(
+        response_text=result.get("response_text", ""),
+        language=result.get("language", "en"),
+        user_role=result.get("user_role", user.role.value if hasattr(user.role, "value") else str(user.role)),
+        actions_executed=result.get("actions_executed", []),
+        timestamp=result.get("timestamp", ""),
+    )
+
+
+@router.post("/logistics/explain-route")
+def explain_route(
+    payload: RouteExplainIn,
+    user: User = Depends(get_current_user),
+):
+    """
+    Provides an AI explanation for why a specific vehicle and route was chosen.
+    Explains vehicle capacity, bike <= 50kg immediate dispatch rule, truck >= 35% fill threshold,
+    and multi-warehouse sequencing.
+    """
+    explanation = explain_route_decision(payload.route_plan)
+    return {
+        "explanation": explanation,
+        "label": "AI ROUTE EXPLANATION",
+    }
+
+
+@router.get("/logistics/plans")
+def get_route_plans(
+    vehicle_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Generates intelligent route optimization plans using Google Distance Matrix & Road Networks
+    across the 3 pilot warehouses (Tenkasi, Tirunelveli, Thoothukudi).
+    Groups compatible orders and enforces Bike <= 50kg and Truck >= 35% fill constraints.
+    """
+    return plan_and_optimize_routes(db=db, transporter_user=user, preferred_vehicle_id=vehicle_id)
+

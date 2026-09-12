@@ -33,4 +33,4 @@ Thumbs.db
 
 # Uploads
 backend/static/uploads/reviews/*
-!backend/static/uploads/reviews/.gitkeep
+!backend/static/uploads/reviews/.gitkeep

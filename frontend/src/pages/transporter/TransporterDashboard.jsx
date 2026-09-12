@@ -34,6 +34,8 @@ import {
   updateTransportJobStatus,
   updateVehicleLocation,
   getOptimizedRoutes,
+  getAiLogisticsPlans,
+  explainAiRoute,
   availableBatches,
   myBatches,
   acceptBatch,
@@ -477,15 +479,49 @@ export default function TransporterDashboard() {
   // AI Optimized Route state
   const [routeOpt, setRouteOpt] = useState(null)
   const [routeOptLoading, setRouteOptLoading] = useState(false)
+  const [aiPlans, setAiPlans] = useState(null)
+  const [aiPlansLoading, setAiPlansLoading] = useState(false)
+  const [planExplanations, setPlanExplanations] = useState({})
+  const [explainingKey, setExplainingKey] = useState(null)
 
   const loadOptimizedRoutes = () => {
     setRouteOptLoading(true)
-    getOptimizedRoutes()
-      .then((res) => setRouteOpt(res.data))
-      .catch((err) => {
-        console.error(err)
+    setAiPlansLoading(true)
+    Promise.all([
+      getOptimizedRoutes().catch((err) => {
+        console.error('getOptimizedRoutes error:', err)
+        return { data: null }
+      }),
+      getAiLogisticsPlans().catch((err) => {
+        console.error('getAiLogisticsPlans error:', err)
+        return { data: null }
+      }),
+    ])
+      .then(([optRes, planRes]) => {
+        if (optRes.data) setRouteOpt(optRes.data)
+        if (planRes.data) setAiPlans(planRes.data)
       })
-      .finally(() => setRouteOptLoading(false))
+      .finally(() => {
+        setRouteOptLoading(false)
+        setAiPlansLoading(false)
+      })
+  }
+
+  const handleExplainPlan = async (plan) => {
+    const key = plan.plan_code || `${plan.vehicle_name}-${plan.destination_area}`
+    setExplainingKey(key)
+    try {
+      const res = await explainAiRoute({ route_plan: plan })
+      setPlanExplanations((prev) => ({ ...prev, [key]: res.data.explanation }))
+    } catch (err) {
+      console.error('Failed to explain route:', err)
+      setPlanExplanations((prev) => ({
+        ...prev,
+        [key]: 'Unable to fetch AI explanation. Please ensure connection to Gemini backend is active.',
+      }))
+    } finally {
+      setExplainingKey(null)
+    }
   }
 
   // Manual override / place-search fallback state
@@ -1508,7 +1544,7 @@ export default function TransporterDashboard() {
                 </div>
               ))}
             </div>
-          ) : !routeOpt?.has_jobs || routeOpt?.trips?.length === 0 ? (
+          ) : (!routeOpt?.has_jobs || routeOpt?.trips?.length === 0) && (!aiPlans?.has_routes || (aiPlans.dispatch_plans?.length === 0 && aiPlans.waiting_consolidation?.length === 0)) ? (
             <div className="card text-center py-16 px-4 border-2 border-dashed border-slate-200">
               <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-indigo-100">
                 <Sparkles className="w-7 h-7" />
@@ -1527,6 +1563,203 @@ export default function TransporterDashboard() {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Active Warehouses Pilot Network */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { district: 'Tenkasi', coords: '8.9594° N, 77.3167° E', role: 'Produce Aggregation & Direct Dispatch' },
+                  { district: 'Tirunelveli', coords: '8.7139° N, 77.7567° E', role: 'Central Cross-Dock & Highway Transit' },
+                  { district: 'Thoothukudi', coords: '8.7642° N, 78.1348° E', role: 'Coastal Commercial & Port Logistics' }
+                ].map((wh) => (
+                  <div key={wh.district} className="card p-3.5 border border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-white rounded-xl">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Building2 className="w-4 h-4 text-indigo-600" />
+                      <span className="font-bold text-slate-900 text-xs">{wh.district} Central Agri-Warehouse</span>
+                    </div>
+                    <p className="text-[10px] font-mono text-slate-500">{wh.coords}</p>
+                    <p className="text-[11px] text-slate-600 mt-1">{wh.role}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* AI Decision & Vehicle Dispatch Rules */}
+              {aiPlans && (aiPlans.dispatch_plans?.length > 0 || aiPlans.waiting_consolidation?.length > 0) && (
+                <div className="space-y-4">
+                  {/* Ready to Dispatch Plans */}
+                  {aiPlans.dispatch_plans?.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          Ready for Dispatch ({aiPlans.dispatch_plans.length} Vehicle Route{aiPlans.dispatch_plans.length > 1 ? 's' : ''})
+                        </h3>
+                        <span className="text-[11px] text-slate-500 font-medium">Google Road Network + Gemini AI Layer</span>
+                      </div>
+
+                      {aiPlans.dispatch_plans.map((plan, pIdx) => {
+                        const planKey = plan.plan_code || `${plan.vehicle_name}-${pIdx}`
+                        const isBike = plan.vehicle_category === 'Bike'
+                        return (
+                          <div key={planKey} className="card p-5 border border-emerald-200 bg-gradient-to-b from-white to-emerald-50/20 rounded-2xl shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-emerald-100">
+                              <div className="flex items-center gap-2.5">
+                                <span className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${isBike ? 'bg-purple-600' : 'bg-emerald-600'}`}>
+                                  {isBike ? '🛵' : '🚛'}
+                                </span>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-extrabold text-slate-900 text-sm">{plan.vehicle_name}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isBike ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                      {isBike ? 'Bike (≤50kg Immediate Dispatch)' : 'Truck (≥35% Min Fill Satisfied)'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    Destination Area: <b className="text-slate-800">{plan.destination_area}</b> &bull; {plan.total_orders_count} Order(s) &bull; ~{plan.estimated_road_distance_km} km
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleExplainPlan(plan)}
+                                  disabled={explainingKey === planKey}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold border border-indigo-200 flex items-center gap-1.5 transition"
+                                >
+                                  <Sparkles className={`w-3.5 h-3.5 text-indigo-600 ${explainingKey === planKey ? 'animate-spin' : ''}`} />
+                                  {explainingKey === planKey ? 'AI Explaining...' : 'Explain Decision'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Capacity Fill Gauge */}
+                            <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <div className="flex justify-between items-center text-xs mb-1.5">
+                                <span className="font-bold text-slate-700">Payload Fill Capacity</span>
+                                <span className="font-black text-slate-900">{plan.cargo_weight_kg} kg / {plan.vehicle_capacity_kg} kg ({plan.fill_percentage}%)</span>
+                              </div>
+                              <div className="relative w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                                <div
+                                  className={`h-3 rounded-full transition-all ${isBike ? 'bg-purple-600' : 'bg-emerald-600'}`}
+                                  style={{ width: `${Math.min(100, plan.fill_percentage)}%` }}
+                                />
+                                {!isBike && (
+                                  <div
+                                    className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-10"
+                                    style={{ left: '35%' }}
+                                    title="35% Minimum Dispatch Threshold"
+                                  />
+                                )}
+                              </div>
+                              <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                                <span>0 kg</span>
+                                {!isBike && <span className="text-amber-600 font-bold">35% Min Fill ({plan.minimum_dispatch_kg} kg)</span>}
+                                <span>Max {plan.vehicle_capacity_kg} kg</span>
+                              </div>
+                            </div>
+
+                            {/* AI Explanation Accordion */}
+                            {planExplanations[planKey] && (
+                              <div className="mb-4 p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 leading-relaxed animate-fade-in">
+                                <div className="flex items-center gap-1.5 font-bold text-indigo-950 mb-1">
+                                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Gemini Decision Rationale:</span>
+                                </div>
+                                <p>{planExplanations[planKey]}</p>
+                              </div>
+                            )}
+
+                            {/* Sequenced Warehouse & Delivery Stops */}
+                            <div className="space-y-1.5">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Sequenced Stops:</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {plan.stops?.map((stop, sIdx) => (
+                                  <div key={sIdx} className="p-2.5 rounded-lg border border-slate-100 bg-white flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] text-white ${stop.stop_type === 'PICKUP' ? 'bg-amber-600' : 'bg-sky-600'}`}>
+                                        {stop.sequence}
+                                      </span>
+                                      <div>
+                                        <span className="font-bold text-slate-800">{stop.location_name}</span>
+                                        {stop.is_multi_warehouse && (
+                                          <span className="ml-1.5 px-1.5 py-0.2 bg-teal-100 text-teal-800 text-[9px] rounded font-bold">
+                                            Multi-Warehouse
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span className={`font-mono text-[11px] font-bold ${stop.stop_type === 'PICKUP' ? 'text-amber-700' : 'text-sky-700'}`}>
+                                      {stop.stop_type === 'PICKUP' ? `+${stop.cargo_kg} kg` : `-${stop.cargo_kg} kg`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Waiting for Consolidation Section */}
+                  {aiPlans.waiting_consolidation?.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-amber-600" />
+                          Orders Waiting for Vehicle Consolidation ({aiPlans.waiting_consolidation.length})
+                        </h3>
+                        <span className="text-[11px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                          Truck 35% Fill Threshold Enforced
+                        </span>
+                      </div>
+
+                      {aiPlans.waiting_consolidation.map((plan, pIdx) => {
+                        const planKey = plan.plan_code || `waiting-${pIdx}`
+                        return (
+                          <div key={planKey} className="card p-4 border border-amber-200 bg-amber-50/20 rounded-2xl">
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-amber-100 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900">{plan.vehicle_name}</span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900">
+                                  Below 35% Fill ({plan.fill_percentage}%)
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleExplainPlan(plan)}
+                                disabled={explainingKey === planKey}
+                                className="px-2.5 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs flex items-center gap-1"
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-700" />
+                                {explainingKey === planKey ? 'Explaining...' : 'Why Held?'}
+                              </button>
+                            </div>
+                            <p className="text-xs text-slate-600 mb-2">{plan.rule_explanation}</p>
+                            {planExplanations[planKey] && (
+                              <div className="p-3 rounded-lg bg-white border border-amber-200 text-xs text-slate-700 mb-2 leading-relaxed">
+                                {planExplanations[planKey]}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-slate-500">
+                              Destination: <b>{plan.destination_area}</b> &bull; Total Cargo: <b>{plan.cargo_weight_kg} kg</b> (Required: ≥ {plan.minimum_dispatch_kg} kg)
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Technical Solver Telemetry Header */}
+              {routeOpt?.trips?.length > 0 && (
+                <>
+                  <div className="pt-4 border-t border-slate-200">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                      OR-Tools Constraint Solver Telemetry & Routing
+                    </h3>
+                  </div>
+                </>
+              )}
+
               {/* Optimization KPIs */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="card p-4 border border-slate-200 bg-white">

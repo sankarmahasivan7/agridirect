@@ -118,4 +118,10 @@ export const getProductReviews = (productId) => api.get(`/api/reviews/product/${
 export const getFarmerReviewsSummary = () => api.get('/api/reviews/farmer-summary')
 export const getMyReviews = () => api.get('/api/reviews/mine')
 
+// ---- Voice Assistant & AI Logistics ----
+export const interactWithVoiceAssistant = (data) => api.post('/api/ai/voice/interact', data)
+export const explainAiRoute = (data) => api.post('/api/ai/logistics/explain-route', data)
+export const getAiLogisticsPlans = (params) => api.get('/api/ai/logistics/plans', { params })
+
+
 
