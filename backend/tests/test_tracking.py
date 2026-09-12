@@ -176,3 +176,30 @@ def test_order_and_shipment_tracking():
     assert veh["current_latitude"] is not None
     assert veh["location_updated_at"] is not None
 
+    # 11. Verify Transporter can access tracking without 403 Forbidden
+    trans_headers = {"Authorization": f"Bearer {transporter_token}"}
+    transporter_track = client.get(f"/api/transport/requests/{t_req_id}/track", headers=trans_headers)
+    assert transporter_track.status_code == 200
+    assert transporter_track.json()["id"] == t_req_id
+
+    # 12. Verify Farmer whose produce is in the shipment can access tracking
+    farmer_track = client.get(f"/api/transport/requests/{t_req_id}/track", headers=farmer_headers)
+    assert farmer_track.status_code == 200
+    assert farmer_track.json()["id"] == t_req_id
+
+    # 13. Register an unrelated second buyer and verify 403 Forbidden on other buyer's shipment
+    resp = client.post("/api/auth/register/buyer", json={
+        "email": "unrelated_buyer@test.com",
+        "password": "Password123!",
+        "full_name": "Stranger Buyer",
+        "phone": "9876543999",
+        "buyer_type": "retailer",
+        "district": "Thoothukudi",
+        "location": "Thoothukudi Port",
+    })
+    assert resp.status_code == 201
+    stranger_headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+    stranger_track = client.get(f"/api/transport/requests/{t_req_id}/track", headers=stranger_headers)
+    assert stranger_track.status_code == 403
+    assert stranger_track.json()["detail"] == "You do not have access to this shipment"
+

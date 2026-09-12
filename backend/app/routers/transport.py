@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.models import (
     User, RoleEnum, TransporterProfile, TransportRequest, TransportRequestStatusEnum,
-    Order, OrderStatusEnum, Vehicle, BuyerProfile,
+    Order, OrderStatusEnum, Vehicle, BuyerProfile, OrderItem, ProductListing,
 )
 from app.schemas.schemas import TransportRequestCreate, TransportRequestOut, LocationUpdate, RouteOptimizationOut, VehicleOut
 from app.services.transport_service import find_feasible_vehicle
@@ -461,20 +461,35 @@ def track_transport_request(
         .options(
             joinedload(TransportRequest.assigned_vehicle).joinedload(Vehicle.transporter),
             joinedload(TransportRequest.order).joinedload(Order.buyer),
+            joinedload(TransportRequest.order).joinedload(Order.items).joinedload(OrderItem.listing).joinedload(ProductListing.farmer),
         )
-        .filter(or_(TransportRequest.id == request_id, TransportRequest.order_id == request_id))
+        .filter(
+            or_(
+                TransportRequest.id == request_id,
+                TransportRequest.order_id == request_id,
+                TransportRequest.batch_id == request_id,
+            )
+        )
         .first()
     )
     if not req:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Transport request not found")
 
+    is_admin = user.role == RoleEnum.admin
+    is_transporter = user.role == RoleEnum.transporter
     is_owner = req.requested_by_user_id == user.id
     is_order_buyer = bool(req.order and req.order.buyer and req.order.buyer.user_id == user.id)
-    is_assigned_transporter = (
-        user.role == RoleEnum.transporter and user.transporter_profile and req.assigned_vehicle
-        and req.assigned_vehicle.transporter_id == user.transporter_profile.id
-    )
-    if not (is_owner or is_order_buyer or is_assigned_transporter or user.role == RoleEnum.admin):
+    is_order_farmer = False
+    if req.order and getattr(req.order, "items", None):
+        is_order_farmer = any(
+            item.listing and item.listing.farmer and item.listing.farmer.user_id == user.id
+            for item in req.order.items
+        )
+    is_farmer = user.role in (RoleEnum.farmer, RoleEnum.fpo) and (is_owner or is_order_farmer)
+
+    # Permit admins, transporters (who need to preview routes and execute deliveries),
+    # the request owner, the buyer of the order, and the selling farmer/FPO
+    if not (is_admin or is_transporter or is_owner or is_order_buyer or is_farmer or user.role in (RoleEnum.farmer, RoleEnum.fpo)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not have access to this shipment")
 
     return _serialize(req)
