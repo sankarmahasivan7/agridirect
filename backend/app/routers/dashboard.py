@@ -15,6 +15,23 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/farmer")
 def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.farmer))):
+    if not user.farmer_profile:
+        return {
+            "active_listings_count": 0,
+            "total_listings_count": 0,
+            "pending_orders_count": 0,
+            "earnings": {"gross": "0", "net_earnings": "0", "message": "No profile found."},
+            "perishability_alerts": [],
+            "urgent_listings_count": 0,
+            "rating_summary": {
+                "average_rating": 5.0,
+                "total_reviews": 0,
+                "waste_reports_count": 0,
+                "recent_reviews": [],
+            },
+            "note": "No farmer profile found.",
+        }
+
     farmer_id = user.farmer_profile.id
     listings = db.query(ProductListing).filter(ProductListing.farmer_id == farmer_id).all()
     active_listings = [l for l in listings if l.is_active]
@@ -26,7 +43,7 @@ def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require
         .options(joinedload(OrderItem.order))
         .all()
     )
-    delivered_items = [i for i in items if i.order.status == OrderStatusEnum.DELIVERED]
+    delivered_items = [i for i in items if i.order and i.order.status == OrderStatusEnum.DELIVERED]
 
     gross = sum((i.line_subtotal for i in delivered_items), Decimal("0"))
     # Farmer's share = gross minus platform fee share attributable to this farmer's line items
@@ -34,11 +51,11 @@ def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require
     net_earnings = Decimal("0")
     for i in delivered_items:
         order = i.order
-        if order.subtotal > 0:
+        if order and order.subtotal and order.subtotal > 0:
             share = i.line_subtotal / order.subtotal
             net_earnings += i.line_subtotal - (order.platform_fee * share)
 
-    pending_orders = [i for i in items if i.order.status in (OrderStatusEnum.PENDING, OrderStatusEnum.CONFIRMED)]
+    pending_orders = [i for i in items if i.order and i.order.status in (OrderStatusEnum.PENDING, OrderStatusEnum.CONFIRMED)]
 
     if not items:
         earnings_summary = {"gross": "0", "net_earnings": "0", "message": "No completed orders yet."}
@@ -53,7 +70,7 @@ def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require
             check_and_notify_perishability(db, l)
             urgent_lots.append({
                 "listing_id": l.id,
-                "product_name": l.product.name,
+                "product_name": l.product.name if l.product else "Produce Item",
                 "quantity": float(l.quantity_available),
                 "unit": l.unit,
                 "status": st,
@@ -105,9 +122,16 @@ def farmer_dashboard(db: Session = Depends(get_db), user: User = Depends(require
 
 @router.get("/buyer")
 def buyer_dashboard(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.buyer))):
+    if not user.buyer_profile:
+        return {
+            "total_orders": 0,
+            "total_spent": "0",
+            "message": "You have no orders yet.",
+            "orders_by_status": {s.value: 0 for s in OrderStatusEnum},
+        }
     orders = db.query(Order).filter(Order.buyer_id == user.buyer_profile.id).all()
     if not orders:
-        return {"total_orders": 0, "total_spent": "0", "message": "You have no orders yet."}
+        return {"total_orders": 0, "total_spent": "0", "message": "You have no orders yet.", "orders_by_status": {s.value: 0 for s in OrderStatusEnum}}
     total_spent = sum((o.total_amount for o in orders), Decimal("0"))
     return {
         "total_orders": len(orders),
@@ -120,6 +144,13 @@ def buyer_dashboard(db: Session = Depends(get_db), user: User = Depends(require_
 
 @router.get("/fpo")
 def fpo_dashboard(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.fpo))):
+    if not user.fpo_profile:
+        return {
+            "member_count": 0,
+            "active_listings_count": 0,
+            "total_supply_available": "0",
+            "note": "No FPO profile found.",
+        }
     fpo_id = user.fpo_profile.id
     listings = db.query(ProductListing).filter(ProductListing.fpo_id == fpo_id).all()
     members = db.query(FarmerProfile).filter(FarmerProfile.fpo_id == fpo_id).all()

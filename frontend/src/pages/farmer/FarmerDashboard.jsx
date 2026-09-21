@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   X,
   Eye,
-  BellRing
+  BellRing,
+  RefreshCw
 } from 'lucide-react'
 import { 
   AreaChart, 
@@ -32,25 +33,55 @@ import {
   ResponsiveContainer 
 } from 'recharts'
 
+const DEFAULT_FARMER_DATA = {
+  active_listings_count: 0,
+  total_listings_count: 0,
+  pending_orders_count: 0,
+  earnings: { gross: '0', net_earnings: '0', message: 'No completed orders yet.' },
+  perishability_alerts: [],
+  urgent_listings_count: 0,
+  rating_summary: {
+    average_rating: 5.0,
+    total_reviews: 0,
+    waste_reports_count: 0,
+    recent_reviews: [],
+  },
+}
+
 export default function FarmerDashboard() {
   const [data, setData] = useState(null)
   const [openDemands, setOpenDemands] = useState([])
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const { t, isTamil } = useLanguage()
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true)
+    setError(null)
     farmerDashboard()
-      .then((res) => setData(res.data))
+      .then((res) => {
+        if (res?.data) setData(res.data)
+      })
+      .catch((err) => {
+        console.error('Failed to load farmer dashboard:', err)
+        setError(err?.response?.data?.detail || 'Connecting to server...')
+      })
       .finally(() => setLoading(false))
 
     openAdvanceDemands()
       .then((res) => setOpenDemands(res.data || []))
       .catch((err) => console.error('Failed to load advance demands', err))
+  }
+
+  useEffect(() => {
+    loadData()
   }, [])
 
+  const activeData = data || DEFAULT_FARMER_DATA
+
   // Visual trend for earnings progression based on actual net earnings
-  const netEarnings = Number(data?.earnings?.net_earnings || 0)
+  const netEarnings = Number(activeData.earnings?.net_earnings || 0)
   const performanceData = [
     { name: 'Mon', earnings: Number((netEarnings * 0.15).toFixed(2)) },
     { name: 'Tue', earnings: Number((netEarnings * 0.35).toFixed(2)) },
@@ -74,11 +105,39 @@ export default function FarmerDashboard() {
           </p>
         </div>
 
-        <Link to="/farmer/listings/new" className="btn-primary py-2.5 px-4 text-sm font-semibold shadow-md">
-          <PlusCircle className="w-4 h-4" />
-          {t('dashboard.addNewHarvest', 'Add New Harvest Listing')}
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold flex items-center gap-2 transition shadow-2xs"
+            title="Refresh Dashboard"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">{t('dashboard.refresh', 'Refresh')}</span>
+          </button>
+          <Link to="/farmer/listings/new" className="btn-primary py-2.5 px-4 text-sm font-semibold shadow-md">
+            <PlusCircle className="w-4 h-4" />
+            {t('dashboard.addNewHarvest', 'Add New Harvest Listing')}
+          </Link>
+        </div>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-4 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span className="text-sm font-medium">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shrink-0 shadow-2xs"
+          >
+            {t('common.retry', 'Retry')}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
@@ -99,7 +158,7 @@ export default function FarmerDashboard() {
                 </div>
               </div>
               <div className="text-3xl font-black text-slate-900 tracking-tight">
-                {data.active_listings_count}
+                {activeData.active_listings_count ?? 0}
               </div>
               <p className="text-[11px] text-slate-500 font-medium mt-1">{t('dashboard.discoverableInMarket', 'Directly discoverable in marketplace')}</p>
             </div>
@@ -112,7 +171,7 @@ export default function FarmerDashboard() {
                 </div>
               </div>
               <div className="text-3xl font-black text-slate-900 tracking-tight">
-                {data.pending_orders_count}
+                {activeData.pending_orders_count ?? 0}
               </div>
               <p className="text-[11px] text-slate-500 font-medium mt-1">{t('dashboard.awaitingFulfillment', 'Awaiting your fulfillment confirmation')}</p>
             </div>
@@ -128,10 +187,10 @@ export default function FarmerDashboard() {
                 </div>
               </div>
               <div className="text-3xl font-black text-emerald-800 tracking-tight">
-                ₹{Number(data.earnings.net_earnings).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                ₹{Number(activeData.earnings?.net_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
               <p className="text-[11px] text-emerald-700 font-bold mt-1">
-                {data.earnings.message || 'Zero middleman deductions taken.'}
+                {activeData.earnings?.message || 'Zero middleman deductions taken.'}
               </p>
             </div>
 
@@ -145,17 +204,17 @@ export default function FarmerDashboard() {
               </div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-3xl font-extrabold text-slate-900">
-                  {data.rating_summary?.total_reviews > 0 ? `${data.rating_summary.average_rating}★` : '5.0★'}
+                  {activeData.rating_summary?.total_reviews > 0 ? `${activeData.rating_summary.average_rating}★` : '5.0★'}
                 </span>
                 <span className="text-xs text-slate-500 font-medium">
-                  ({data.rating_summary?.total_reviews || 0} {isTamil ? 'மதிப்பீடுகள்' : 'reviews'})
+                  ({activeData.rating_summary?.total_reviews || 0} {isTamil ? 'மதிப்பீடுகள்' : 'reviews'})
                 </span>
               </div>
               <div className="mt-1">
-                {data.rating_summary?.waste_reports_count > 0 ? (
+                {activeData.rating_summary?.waste_reports_count > 0 ? (
                   <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    {data.rating_summary.waste_reports_count} {isTamil ? 'தரப் புகார்(கள்) பதிவாகியுள்ளன' : 'Quality Issue(s) Reported'}
+                    {activeData.rating_summary.waste_reports_count} {isTamil ? 'தரப் புகார்(கள்) பதிவாகியுள்ளன' : 'Quality Issue(s) Reported'}
                   </span>
                 ) : (
                   <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
@@ -302,18 +361,18 @@ export default function FarmerDashboard() {
               <div className="flex items-center gap-3">
                 <div className="px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
                   <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-                  <span>{isTamil ? 'ஒட்டுமொத்த மதிப்பீடு:' : 'Overall Rating:'} {data.rating_summary?.total_reviews > 0 ? `${data.rating_summary.average_rating} / 5.0` : '5.0 / 5.0'}</span>
+                  <span>{isTamil ? 'ஒட்டுமொத்த மதிப்பீடு:' : 'Overall Rating:'} {activeData.rating_summary?.total_reviews > 0 ? `${activeData.rating_summary.average_rating} / 5.0` : '5.0 / 5.0'}</span>
                 </div>
               </div>
             </div>
 
             {/* Quality Issue Warning Banner */}
-            {data.rating_summary?.waste_reports_count > 0 && (
+            {activeData.rating_summary?.waste_reports_count > 0 && (
               <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-rose-950 text-sm">
-                    {isTamil ? `தர எச்சரிக்கை: ${data.rating_summary.waste_reports_count} விளைபொருள் சிக்கல்(கள்) தெரிவிக்கப்பட்டது` : `Quality Alert: ${data.rating_summary.waste_reports_count} Produce Issue(s) Reported`}
+                    {isTamil ? `தர எச்சரிக்கை: ${activeData.rating_summary.waste_reports_count} விளைபொருள் சிக்கல்(கள்) தெரிவிக்கப்பட்டது` : `Quality Alert: ${activeData.rating_summary.waste_reports_count} Produce Issue(s) Reported`}
                   </span>
                   <p className="text-rose-700 mt-0.5 leading-relaxed">
                     {isTamil 
@@ -325,12 +384,15 @@ export default function FarmerDashboard() {
             )}
 
             {/* Reviews List */}
-            {data.rating_summary?.recent_reviews && data.rating_summary.recent_reviews.length > 0 ? (
+            {activeData.rating_summary?.recent_reviews && activeData.rating_summary.recent_reviews.length > 0 ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {data.rating_summary.recent_reviews.map((rev) => {
+                  {activeData.rating_summary.recent_reviews.map((rev) => {
+                    const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+                      ? 'https://agridirect-back.onrender.com'
+                      : 'http://localhost:8000'
                     const photoUrl = rev.image_url
-                      ? (rev.image_url.startsWith('http') ? rev.image_url : `http://localhost:8000${rev.image_url}`)
+                      ? (rev.image_url.startsWith('http') ? rev.image_url : `${baseUrl}${rev.image_url}`)
                       : null
 
                     return (
