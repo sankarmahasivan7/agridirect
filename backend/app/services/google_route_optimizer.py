@@ -65,7 +65,12 @@ def plan_and_optimize_routes(
         available_vehicles = db.query(Vehicle).filter(Vehicle.is_active == True).all()
 
     # 2. Retrieve Real Pending Consignments / Orders
-    pending_jobs = (
+    target_vehicle_id = preferred_vehicle_id or (
+        transporter_user.transporter_profile.vehicle.id
+        if transporter_user and transporter_user.transporter_profile and transporter_user.transporter_profile.vehicle
+        else None
+    )
+    pending_jobs_query = (
         db.query(TransportRequest)
         .options(joinedload(TransportRequest.order))
         .filter(
@@ -76,8 +81,15 @@ def plan_and_optimize_routes(
                 TransportRequestStatusEnum.ASSIGNED,
             ])
         )
-        .all()
     )
+    if target_vehicle_id:
+        pending_jobs_query = pending_jobs_query.filter(
+            or_(
+                TransportRequest.assigned_vehicle_id == target_vehicle_id,
+                TransportRequest.assigned_vehicle_id == None,
+            )
+        )
+    pending_jobs = pending_jobs_query.all()
 
     # If no real jobs exist in the database, return honest empty state
     if not pending_jobs:

@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCheck, Package, Truck, CheckCircle2, Info, X } from 'lucide-react'
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api.js'
 import { useToast } from './Toast.jsx'
+import { useLanguage } from '../context/LanguageContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function NotificationBell() {
+  const { t, isTamil } = useLanguage()
+  const { isAuthenticated, token, logout } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
@@ -14,11 +18,21 @@ export default function NotificationBell() {
   const { addToast } = useToast()
   const navigate = useNavigate()
 
-  // Poll for unread notification count every 10s
+  // Poll for unread notification count only when properly authenticated
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      setUnreadCount(0)
+      return
+    }
+
     let mounted = true
 
     const checkUnread = async () => {
+      // Double check token in localStorage before sending
+      if (!localStorage.getItem('agridirect_token')) {
+        return
+      }
+
       try {
         const res = await getUnreadNotificationCount()
         const count = res.data?.unread_count || 0
@@ -39,18 +53,21 @@ export default function NotificationBell() {
         previousCountRef.current = count
         setUnreadCount(count)
       } catch (err) {
-        // silent fail when unauthenticated or network error
+        if (err.response?.status === 401) {
+          logout()
+          setUnreadCount(0)
+        }
       }
     }
 
     checkUnread()
-    const interval = setInterval(checkUnread, 10000)
+    const interval = setInterval(checkUnread, 15000)
 
     return () => {
       mounted = false
       clearInterval(interval)
     }
-  }, [addToast])
+  }, [isAuthenticated, token, logout, addToast])
 
   // Load full notification list when dropdown is opened
   const fetchNotifications = async () => {
@@ -133,9 +150,14 @@ export default function NotificationBell() {
 
   const formatTimeAgo = (dateStr) => {
     try {
+      if (!dateStr) return ''
+      const raw = dateStr
+      const isoStr = typeof raw === 'string' && !raw.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(raw)
+        ? `${raw}Z`
+        : raw
       const now = new Date()
-      const past = new Date(dateStr)
-      const diffMs = now - past
+      const past = new Date(isoStr)
+      const diffMs = Math.max(0, now - past)
       const diffMins = Math.floor(diffMs / 60000)
       if (diffMins < 1) return 'Just now'
       if (diffMins < 60) return `${diffMins}m ago`
@@ -164,14 +186,14 @@ export default function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-soft-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-soft-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
           <div className="flex items-center justify-between px-4 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900 text-base">Notifications</span>
+              <span className="font-bold text-slate-900 text-base">{t('notifications.title', 'Notifications')}</span>
               {unreadCount > 0 && (
                 <span className="px-2 py-0.5 text-xs font-semibold bg-leaf-100 text-leaf-800 rounded-full">
-                  {unreadCount} new
+                  {unreadCount} {t('notifications.newBadge', 'new')}
                 </span>
               )}
             </div>
@@ -181,7 +203,7 @@ export default function NotificationBell() {
                 className="flex items-center gap-1 text-xs font-semibold text-leaf-600 hover:text-leaf-800 hover:underline"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                Mark all read
+                {t('notifications.markAllRead', 'Mark all read')}
               </button>
             )}
           </div>
@@ -189,12 +211,12 @@ export default function NotificationBell() {
           {/* List */}
           <div className="max-h-96 overflow-y-auto divide-y divide-slate-50">
             {loading ? (
-              <div className="py-8 text-center text-sm text-slate-400">Loading updates...</div>
+              <div className="py-8 text-center text-sm text-slate-400">{isTamil ? 'அறிவிப்புகள் ஏற்றப்படுகின்றன...' : 'Loading updates...'}</div>
             ) : notifications.length === 0 ? (
               <div className="py-8 px-4 text-center">
                 <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-700">No notifications yet</p>
-                <p className="text-xs text-slate-400 mt-0.5">You're all caught up with live platform updates.</p>
+                <p className="text-sm font-semibold text-slate-700">{t('notifications.noNotifications', 'No notifications yet')}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('notifications.noNotificationsDesc', "You're all caught up with live platform updates.")}</p>
               </div>
             ) : (
               notifications.map((notif) => (
@@ -233,8 +255,8 @@ export default function NotificationBell() {
 
           {/* Footer */}
           <div className="px-4 pt-2.5 mt-1 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>District Hub Alerts Active</span>
-            <span className="text-leaf-600 font-semibold">Tenkasi • Tirunelveli • Thoothukudi</span>
+            <span>{isTamil ? 'மாவட்ட மைய எச்சரிக்கைகள் செயலில் உள்ளன' : 'District Hub Alerts Active'}</span>
+            <span className="text-leaf-600 font-semibold">{isTamil ? 'தென்காசி • திருநெல்வேலி • தூத்துக்குடி' : 'Tenkasi • Tirunelveli • Thoothukudi'}</span>
           </div>
         </div>
       )}

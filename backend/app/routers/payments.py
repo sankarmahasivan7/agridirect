@@ -36,7 +36,7 @@ def confirm_qr_payment(
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
         .filter(Order.id == payload.order_id)
-        .with_for_update()
+        .with_for_update(of=Order)
         .first()
     )
     if not order:
@@ -106,7 +106,7 @@ def verify_payment(
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
         .filter(Order.id == payload.order_id)
-        .with_for_update()
+        .with_for_update(of=Order)
         .first()
     )
     if not order:
@@ -192,7 +192,7 @@ def fail_payment(
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
         .filter(Order.id == payload.order_id)
-        .with_for_update()
+        .with_for_update(of=Order)
         .first()
     )
     if not order:
@@ -240,7 +240,7 @@ def collect_cod_payment(
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
         .filter(Order.id == order_id)
-        .with_for_update()
+        .with_for_update(of=Order)
         .first()
     )
     if not order:

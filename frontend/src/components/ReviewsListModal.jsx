@@ -12,8 +12,10 @@ import {
   Image as ImageIcon
 } from 'lucide-react'
 import { getListingReviews } from '../services/api.js'
+import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function ReviewsListModal({ isOpen, onClose, listing }) {
+  const { t, isTamil } = useLanguage()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
@@ -65,10 +67,10 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
             </span>
             <div>
               <h3 className="text-xl font-extrabold text-slate-900 capitalize">
-                {listing.product_name} &bull; Customer Reviews
+                {listing.product_name} &bull; {t('reviewsList.title', 'Customer Reviews')}
               </h3>
               <p className="text-xs text-slate-500">
-                Grown by <span className="font-bold text-slate-700">{listing.farmer_name || 'Verified Farmer'}</span> &bull; {listing.location || 'Tamil Nadu'}
+                {t('reviewsList.grownBy', 'Grown by')} <span className="font-bold text-slate-700">{listing.farmer_name || t('common.verifiedProducer', 'Verified Farmer')}</span> &bull; {listing.location || 'Tamil Nadu'}
               </p>
             </div>
           </div>
@@ -86,9 +88,9 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
               <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
                 <Star className="w-7 h-7 text-amber-400" />
               </div>
-              <h4 className="text-base font-bold text-slate-900 mb-1">No Reviews Yet</h4>
+              <h4 className="text-base font-bold text-slate-900 mb-1">{t('reviewsList.noReviews', 'No Reviews Yet')}</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                This harvest batch has not received customer reviews yet. Be the first verified buyer to order and share your produce photos!
+                {t('reviewsList.noReviewsDesc', 'This harvest batch has not received customer reviews yet. Be the first verified buyer to order and share your produce photos!')}
               </p>
             </div>
           ) : (
@@ -113,7 +115,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
                     ))}
                   </div>
                   <p className="text-xs text-slate-500">
-                    Based on <b>{totalReviews} verified purchase{totalReviews > 1 ? 's' : ''}</b>
+                    {t('reviewsList.basedOn', 'Based on')} <b>{totalReviews} {t('reviewsList.verifiedPurchases', 'verified purchase(s)')}</b>
                   </p>
                 </div>
 
@@ -144,7 +146,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
                   <div className="flex items-center gap-1.5 mb-2.5">
                     <Camera className="w-4 h-4 text-emerald-600" />
                     <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Customer Produce Photos ({photos.length})
+                      {t('reviewsList.customerPhotos', 'Customer Produce Photos')} ({photos.length})
                     </h4>
                   </div>
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -172,7 +174,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
               {/* Reviews List */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Verified Buyer Reviews ({reviews.length})
+                  {t('reviewsList.buyerReviews', 'Verified Buyer Reviews')} ({reviews.length})
                 </h4>
 
                 <div className="divide-y divide-slate-100 space-y-4">
@@ -192,7 +194,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
                               <p className="text-xs font-bold text-slate-900 flex items-center gap-1">
                                 {rev.buyer_name}
                                 <span className="text-[10px] font-normal text-emerald-600 flex items-center gap-0.5">
-                                  <CheckCircle2 className="w-3 h-3" /> Verified Buyer
+                                  <CheckCircle2 className="w-3 h-3" /> {t('reviewsList.verifiedBuyer', 'Verified Buyer')}
                                 </span>
                               </p>
                               <p className="text-[10px] text-slate-400">
@@ -235,7 +237,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
                                 className="w-32 h-24 object-cover group-hover:scale-105 transition"
                               />
                               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
-                                <Eye className="w-3.5 h-3.5" /> Inspect
+                                <Eye className="w-3.5 h-3.5" /> {t('common.inspect', 'Inspect')}
                               </div>
                             </button>
                           </div>
@@ -256,7 +258,7 @@ export default function ReviewsListModal({ isOpen, onClose, listing }) {
             onClick={onClose}
             className="btn-secondary text-xs py-2 px-5"
           >
-            Close
+            {t('common.close', 'Close')}
           </button>
         </div>
 

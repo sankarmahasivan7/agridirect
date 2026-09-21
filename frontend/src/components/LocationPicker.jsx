@@ -1,6 +1,25 @@
 import React, { useState } from 'react'
 import { MapPin, Navigation, Search, Compass, Loader2, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 
+const REGIONAL_TOWNS = [
+  { name: 'Surandai, Tenkasi', lat: 8.9754, lon: 77.4258, display_name: 'Surandai, Tenkasi, Tamil Nadu' },
+  { name: 'Tenkasi Town', lat: 8.9594, lon: 77.3167, display_name: 'Tenkasi, Tamil Nadu' },
+  { name: 'Sankarankoil, Tenkasi', lat: 9.1724, lon: 77.5323, display_name: 'Sankarankoil, Tenkasi, Tamil Nadu' },
+  { name: 'Kadayanallur, Tenkasi', lat: 9.0744, lon: 77.3486, display_name: 'Kadayanallur, Tenkasi, Tamil Nadu' },
+  { name: 'Shenkottai, Tenkasi', lat: 8.9833, lon: 77.2500, display_name: 'Shenkottai, Tenkasi, Tamil Nadu' },
+  { name: 'Alangulam, Tenkasi', lat: 8.8711, lon: 77.5028, display_name: 'Alangulam, Tenkasi, Tamil Nadu' },
+  { name: 'Pavoorchatram, Tenkasi', lat: 8.9056, lon: 77.3778, display_name: 'Pavoorchatram, Tenkasi, Tamil Nadu' },
+  { name: 'Tirunelveli Junction', lat: 8.7139, lon: 77.7567, display_name: 'Tirunelveli, Tamil Nadu' },
+  { name: 'Palayamkottai, Tirunelveli', lat: 8.7196, lon: 77.7340, display_name: 'Palayamkottai, Tirunelveli, Tamil Nadu' },
+  { name: 'Ambasamudram, Tirunelveli', lat: 8.7042, lon: 77.4533, display_name: 'Ambasamudram, Tirunelveli, Tamil Nadu' },
+  { name: 'Thoothukudi Port', lat: 8.7642, lon: 78.1348, display_name: 'Thoothukudi, Tamil Nadu' },
+  { name: 'Kovilpatti, Thoothukudi', lat: 9.1725, lon: 77.8683, display_name: 'Kovilpatti, Thoothukudi, Tamil Nadu' },
+  { name: 'Tiruchendur, Thoothukudi', lat: 8.4947, lon: 78.1202, display_name: 'Tiruchendur, Thoothukudi, Tamil Nadu' },
+  { name: 'Madurai', lat: 9.9252, lon: 78.1198, display_name: 'Madurai, Tamil Nadu' },
+  { name: 'Chennai', lat: 13.0827, lon: 80.2707, display_name: 'Chennai, Tamil Nadu' },
+  { name: 'Coimbatore', lat: 11.0168, lon: 76.9558, display_name: 'Coimbatore, Tamil Nadu' },
+]
+
 export default function LocationPicker({ latitude, longitude, onChange, label = 'Location' }) {
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
@@ -40,18 +59,51 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
   }
 
   const handlePlaceSearch = async (e) => {
-    e.preventDefault()
-    if (!placeQuery.trim()) return
+    if (e && e.preventDefault) e.preventDefault()
+    if (e && e.stopPropagation) e.stopPropagation()
+    const q = placeQuery.trim().toLowerCase()
+    if (!q) return
+
     setSearching(true)
     setPlaceResults([])
+
+    // 1. Instant regional lookup
+    const localMatches = REGIONAL_TOWNS.filter(t => 
+      t.name.toLowerCase().includes(q) || t.display_name.toLowerCase().includes(q)
+    )
+
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeQuery)}&limit=5`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeQuery)}&countrycodes=in&limit=5`,
         { headers: { Accept: 'application/json' } }
       )
-      setPlaceResults(await res.json())
+      if (res.ok) {
+        const apiData = await res.json()
+        const combined = [...localMatches]
+        for (const item of (apiData || [])) {
+          if (!combined.some(c => Math.abs(Number(c.lat) - Number(item.lat)) < 0.01 && Math.abs(Number(c.lon) - Number(item.lon)) < 0.01)) {
+            combined.push(item)
+          }
+        }
+        if (combined.length > 0) {
+          setPlaceResults(combined)
+          setStatus(`Found ${combined.length} match(es). Click a location below to set coordinates.`)
+        } else {
+          setStatus(`No location found matching "${placeQuery}". You can enter latitude & longitude directly below.`)
+        }
+      } else if (localMatches.length > 0) {
+        setPlaceResults(localMatches)
+        setStatus(`Found ${localMatches.length} regional match(es). Click below to select.`)
+      } else {
+        setStatus(`No location found. Please enter latitude & longitude below.`)
+      }
     } catch {
-      setStatus('Could not search for that place right now.')
+      if (localMatches.length > 0) {
+        setPlaceResults(localMatches)
+        setStatus(`Found ${localMatches.length} regional match(es). Click below to select.`)
+      } else {
+        setStatus('Search service unavailable. Please enter latitude & longitude manually.')
+      }
     } finally {
       setSearching(false)
     }
@@ -66,7 +118,8 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
   }
 
   const handleManualSave = (e) => {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
+    if (e && e.stopPropagation) e.stopPropagation()
     if (!manualLat || !manualLng) return
     onChange(Number(manualLat), Number(manualLng))
     setStatus(`Coordinates saved: ${Number(manualLat).toFixed(4)}, ${Number(manualLng).toFixed(4)}`)
@@ -127,24 +180,33 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
         <div className="mt-3 p-3.5 border border-slate-200 rounded-xl bg-white shadow-2xs space-y-3">
           <div>
             <label className="label text-[10px]">Search City / Market / Landmark</label>
-            <form onSubmit={handlePlaceSearch} className="flex gap-2">
+            <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
+                  type="text"
                   className="input pl-9 text-xs"
                   placeholder="e.g. Surandai, Tenkasi, Tamil Nadu"
                   value={placeQuery}
                   onChange={(e) => setPlaceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handlePlaceSearch(e)
+                    }
+                  }}
                 />
               </div>
               <button
+                type="button"
                 className="btn-secondary text-xs px-3.5 py-2 whitespace-nowrap"
-                type="submit"
+                onClick={handlePlaceSearch}
                 disabled={searching}
               >
                 {searching ? 'Searching…' : 'Search'}
               </button>
-            </form>
+            </div>
           </div>
 
           {placeResults.length > 0 && (
@@ -164,7 +226,7 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
 
           <div className="pt-2 border-t border-slate-100">
             <p className="label text-[10px] mb-2">— Or Enter Coordinates Directly —</p>
-            <form onSubmit={handleManualSave} className="flex gap-2 items-end flex-wrap">
+            <div className="flex gap-2 items-end flex-wrap">
               <div>
                 <label className="text-[10px] text-slate-400 block mb-1">Latitude</label>
                 <input
@@ -174,6 +236,13 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
                   placeholder="e.g. 8.9754"
                   value={manualLat}
                   onChange={(e) => setManualLat(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleManualSave(e)
+                    }
+                  }}
                 />
               </div>
               <div>
@@ -185,12 +254,23 @@ export default function LocationPicker({ latitude, longitude, onChange, label = 
                   placeholder="e.g. 77.4258"
                   value={manualLng}
                   onChange={(e) => setManualLng(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleManualSave(e)
+                    }
+                  }}
                 />
               </div>
-              <button className="btn-primary text-xs py-2 px-4" type="submit">
+              <button 
+                type="button"
+                className="btn-primary text-xs py-2 px-4" 
+                onClick={handleManualSave}
+              >
                 Set Coordinates
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}

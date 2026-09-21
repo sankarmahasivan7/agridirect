@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { farmerDashboard } from '../../services/api.js'
+import { farmerDashboard, openAdvanceDemands } from '../../services/api.js'
 import { useLanguage } from '../../context/LanguageContext.jsx'
 import { 
   Package, 
@@ -11,6 +11,7 @@ import {
   FileText, 
   Sparkles, 
   Truck, 
+  Warehouse,
   ArrowUpRight,
   BarChart3,
   Star,
@@ -18,7 +19,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   X,
-  Eye
+  Eye,
+  BellRing
 } from 'lucide-react'
 import { 
   AreaChart, 
@@ -32,14 +34,19 @@ import {
 
 export default function FarmerDashboard() {
   const [data, setData] = useState(null)
+  const [openDemands, setOpenDemands] = useState([])
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [loading, setLoading] = useState(true)
-  const { t } = useLanguage()
+  const { t, isTamil } = useLanguage()
 
   useEffect(() => {
     farmerDashboard()
       .then((res) => setData(res.data))
       .finally(() => setLoading(false))
+
+    openAdvanceDemands()
+      .then((res) => setOpenDemands(res.data || []))
+      .catch((err) => console.error('Failed to load advance demands', err))
   }, [])
 
   // Visual trend for earnings progression based on actual net earnings
@@ -84,54 +91,54 @@ export default function FarmerDashboard() {
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             
-            <div className="card p-6 border border-slate-200/80 shadow-soft relative overflow-hidden">
+            <div className="glass-card p-6 border border-slate-200/90 relative overflow-hidden group">
               <div className="flex items-center justify-between mb-3">
                 <span className="label text-[10px] text-slate-500">{t('dashboard.activeListings', 'Active Listings')}</span>
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 group-hover:scale-105 transition-transform">
                   <Package className="w-5 h-5" />
                 </div>
               </div>
-              <div className="text-3xl font-extrabold text-slate-900">
+              <div className="text-3xl font-black text-slate-900 tracking-tight">
                 {data.active_listings_count}
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">{t('dashboard.discoverableInMarket', 'Directly discoverable in marketplace')}</p>
+              <p className="text-[11px] text-slate-500 font-medium mt-1">{t('dashboard.discoverableInMarket', 'Directly discoverable in marketplace')}</p>
             </div>
 
-            <div className="card p-6 border border-slate-200/80 shadow-soft relative overflow-hidden">
+            <div className="glass-card p-6 border border-slate-200/90 relative overflow-hidden group">
               <div className="flex items-center justify-between mb-3">
                 <span className="label text-[10px] text-slate-500">{t('dashboard.pendingOrders', 'Pending Orders')}</span>
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 group-hover:scale-105 transition-transform">
                   <Clock className="w-5 h-5" />
                 </div>
               </div>
-              <div className="text-3xl font-extrabold text-slate-900">
+              <div className="text-3xl font-black text-slate-900 tracking-tight">
                 {data.pending_orders_count}
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">{t('dashboard.awaitingFulfillment', 'Awaiting your fulfillment confirmation')}</p>
+              <p className="text-[11px] text-slate-500 font-medium mt-1">{t('dashboard.awaitingFulfillment', 'Awaiting your fulfillment confirmation')}</p>
             </div>
 
-            <div className="card p-6 border border-slate-200/80 shadow-soft relative overflow-hidden bg-gradient-to-br from-white to-emerald-50/40">
+            <div className="glass-card p-6 border border-emerald-200/90 relative overflow-hidden bg-gradient-to-br from-white via-white to-emerald-50/50 group">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-1.5">
                   <span className="label text-[10px] text-slate-500 mb-0">{t('dashboard.netTakeHome', 'Net Take-Home Pay')}</span>
-                  <span className="badge-actual text-[10px] py-0 px-2">{t('dashboard.directTakeHome', '100% Direct')}</span>
+                  <span className="badge-direct text-[10px] py-0 px-2">{t('dashboard.directTakeHome', '100% Direct')}</span>
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center border border-emerald-200 group-hover:scale-105 transition-transform">
                   <Coins className="w-5 h-5" />
                 </div>
               </div>
-              <div className="text-3xl font-extrabold text-leaf-800">
+              <div className="text-3xl font-black text-emerald-800 tracking-tight">
                 ₹{Number(data.earnings.net_earnings).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
-              <p className="text-[11px] text-emerald-700 font-medium mt-1">
+              <p className="text-[11px] text-emerald-700 font-bold mt-1">
                 {data.earnings.message || 'Zero middleman deductions taken.'}
               </p>
             </div>
 
             {/* Customer Rating & Quality Card */}
-            <div className="card p-6 border border-slate-200/80 shadow-soft relative overflow-hidden bg-gradient-to-br from-white to-amber-50/40">
+            <div className="glass-card p-6 border border-amber-200/80 relative overflow-hidden bg-gradient-to-br from-white via-white to-amber-50/40 group">
               <div className="flex items-center justify-between mb-3">
-                <span className="label text-[10px] text-slate-500">Customer Rating</span>
+                <span className="label text-[10px] text-slate-500">{isTamil ? 'வாடிக்கையாளர் மதிப்பீடு' : 'Customer Rating'}</span>
                 <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
                   <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
                 </div>
@@ -141,24 +148,105 @@ export default function FarmerDashboard() {
                   {data.rating_summary?.total_reviews > 0 ? `${data.rating_summary.average_rating}★` : '5.0★'}
                 </span>
                 <span className="text-xs text-slate-500 font-medium">
-                  ({data.rating_summary?.total_reviews || 0} reviews)
+                  ({data.rating_summary?.total_reviews || 0} {isTamil ? 'மதிப்பீடுகள்' : 'reviews'})
                 </span>
               </div>
               <div className="mt-1">
                 {data.rating_summary?.waste_reports_count > 0 ? (
                   <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    {data.rating_summary.waste_reports_count} Quality Issue(s) Reported
+                    {data.rating_summary.waste_reports_count} {isTamil ? 'தரப் புகார்(கள்) பதிவாகியுள்ளன' : 'Quality Issue(s) Reported'}
                   </span>
                 ) : (
                   <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    Produce quality verified
+                    {isTamil ? 'விளைபொருள் தரம் சரிபார்க்கப்பட்டது' : 'Produce quality verified'}
                   </p>
                 )}
               </div>
             </div>
 
+          </div>
+
+          {/* Urgent Buyer Advance Demands Broadcast Feed */}
+          <div className="card p-6 border border-amber-200/90 shadow-soft mb-8 bg-gradient-to-br from-white via-amber-50/20 to-emerald-50/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-amber-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                    <BellRing className="w-4 h-4 animate-bounce" />
+                  </div>
+                  <h2 className="text-base font-black text-slate-900">
+                    {isTamil ? 'அவசர வாங்குபவர் முன்பதிவு கோரிக்கைகள்' : 'Urgent Buyer Advance Demands & Early Bookings'}
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900">
+                    {openDemands.length} {isTamil ? 'அறிவிக்கப்பட்டது' : 'Broadcasted'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  {isTamil 
+                    ? 'உங்கள் பகுதியில் உள்ள வாங்குபவர்கள் எதிர்வரும் நாட்களுக்குத் தேவையான விளைபொருட்களை முன்பதிவு செய்துள்ளனர். மத்திய கிடங்கிற்கு அனுப்பவும் அல்லது #1 முன்னுரிமையுடன் உடனடியாக விற்க உங்கள் அறுவடையைப் பட்டியலிடவும்!' 
+                    : 'Buyers in your region have applied early for produce needed in upcoming days. Deliver to the central warehouse or list your harvest to secure instant guaranteed sale with #1 Priority!'}
+                </p>
+              </div>
+
+              <Link
+                to="/farmer/listings/new"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition shrink-0"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>{isTamil ? 'விளைபொருள் வழங்குக' : 'Supply Produce'}</span>
+              </Link>
+            </div>
+
+            {openDemands.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-500 italic bg-white/70 rounded-2xl border border-slate-100">
+                {isTamil ? 'தற்போது புதிய வாங்குபவர் கோரிக்கைகள் எதுவும் இல்லை. வாங்குபவர் கோரிக்கை வைக்கும் போது இங்கே உடனடியாகத் தோன்றும்!' : 'No active advance buyer demands right now. When a buyer submits an early crop request, it will appear here immediately!'}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {openDemands.map((demand) => (
+                  <div
+                    key={demand.id}
+                    className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:border-emerald-300 hover:shadow-xs transition flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-base font-black text-slate-900">{demand.product_name}</span>
+                        <span className="text-2xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                          {demand.quality_grade || 'Fresh Grade'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs text-slate-600 mb-3">
+                        <div className="flex items-center justify-between font-bold text-slate-900 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                          <span>{isTamil ? 'தேவையான அளவு:' : 'Quantity Needed:'}</span>
+                          <span className="text-emerald-700 font-extrabold text-sm">
+                            {demand.remaining_quantity || demand.required_quantity} {demand.unit}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-500 pt-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{isTamil ? 'தேவைப்படும் நாள்:' : 'Needed by:'} <b className="text-slate-700">{demand.needed_by || (isTamil ? 'அடுத்த சில நாட்கள்' : 'Upcoming days')}</b></span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-500">
+                          <Warehouse className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{isTamil ? 'கிடங்கு:' : 'Warehouse:'} <b className="text-slate-700">{demand.delivery_location || (isTamil ? 'தென்காசி மையம்' : 'Tenkasi Hub')}</b></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Link
+                      to={`/farmer/listings/new`}
+                      className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs text-center border border-emerald-300/80 transition flex items-center justify-center gap-1 mt-2"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isTamil ? 'இந்த வாங்குபவருக்கு விளைபொருளை வழங்குக' : 'Ready Produce for this Buyer'}</span>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Performance Trend Chart */}
@@ -199,18 +287,22 @@ export default function FarmerDashboard() {
               <div>
                 <div className="flex items-center gap-2">
                   <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
-                  <h2 className="text-base font-bold text-slate-900">Customer Quality Feedback & Produce Inspection</h2>
-                  <span className="badge-actual text-xs">Buyer Verified</span>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {isTamil ? 'வாடிக்கையாளர் தரக் கருத்துகள் & விளைபொருள் ஆய்வு' : 'Customer Quality Feedback & Produce Inspection'}
+                  </h2>
+                  <span className="badge-actual text-xs">{isTamil ? 'வாங்குபவர் சரிபார்க்கப்பட்டது' : 'Buyer Verified'}</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  Inspect buyer ratings, harvest quality feedback, and customer-uploaded produce photos.
+                  {isTamil 
+                    ? 'வாங்குபவரின் மதிப்பீடுகள், அறுவடை தரக் கருத்துகள் மற்றும் வாடிக்கையாளர் பதிவேற்றிய புகைப்படங்களை ஆய்வு செய்யவும்.' 
+                    : 'Inspect buyer ratings, harvest quality feedback, and customer-uploaded produce photos.'}
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
                   <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-                  <span>Overall Rating: {data.rating_summary?.total_reviews > 0 ? `${data.rating_summary.average_rating} / 5.0` : '5.0 / 5.0'}</span>
+                  <span>{isTamil ? 'ஒட்டுமொத்த மதிப்பீடு:' : 'Overall Rating:'} {data.rating_summary?.total_reviews > 0 ? `${data.rating_summary.average_rating} / 5.0` : '5.0 / 5.0'}</span>
                 </div>
               </div>
             </div>
@@ -221,10 +313,12 @@ export default function FarmerDashboard() {
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-rose-950 text-sm">
-                    Quality Alert: {data.rating_summary.waste_reports_count} Produce Issue(s) Reported
+                    {isTamil ? `தர எச்சரிக்கை: ${data.rating_summary.waste_reports_count} விளைபொருள் சிக்கல்(கள்) தெரிவிக்கப்பட்டது` : `Quality Alert: ${data.rating_summary.waste_reports_count} Produce Issue(s) Reported`}
                   </span>
                   <p className="text-rose-700 mt-0.5 leading-relaxed">
-                    One or more buyers reported damaged or waste vegetables and provided photo evidence. Please inspect the photos below to check harvest sorting and storage handling.
+                    {isTamil 
+                      ? 'ஒன்று அல்லது அதற்கு மேற்பட்ட வாங்குபவர்கள் சேதமடைந்த விளைபொருட்கள் பற்றி புகைப்பட ஆதாரங்களுடன் தெரிவித்துள்ளனர். அறுவடை தரம் மற்றும் சேமிப்பு முறைகளை சரிபார்க்க கீழே உள்ள புகைப்படங்களை ஆய்வு செய்யவும்.' 
+                      : 'One or more buyers reported damaged or waste vegetables and provided photo evidence. Please inspect the photos below to check harvest sorting and storage handling.'}
                   </p>
                 </div>
               </div>
@@ -251,7 +345,7 @@ export default function FarmerDashboard() {
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div>
                             <span className="font-bold text-slate-900 text-xs">{rev.product_name}</span>
-                            <p className="text-[11px] text-slate-400">Order #{rev.order_id} &bull; Buyer: {rev.buyer_name}</p>
+                            <p className="text-[11px] text-slate-400">Order #{rev.order_id} &bull; {isTamil ? 'வாங்குபவர்:' : 'Buyer:'} {rev.buyer_name}</p>
                           </div>
                           <div className="flex items-center gap-1 text-amber-400 shrink-0">
                             {[1, 2, 3, 4, 5].map((s) => (
@@ -275,7 +369,7 @@ export default function FarmerDashboard() {
                           <div className="mt-2">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
                               <Camera className="w-3 h-3 text-emerald-600" />
-                              Customer Inspection Photo
+                              {isTamil ? 'வாடிக்கையாளர் ஆய்வு புகைப்படம்' : 'Customer Inspection Photo'}
                             </p>
                             <button
                               type="button"
@@ -288,7 +382,7 @@ export default function FarmerDashboard() {
                                 className="w-36 h-24 object-cover group-hover:scale-105 transition"
                               />
                               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
-                                <Eye className="w-3.5 h-3.5" /> Inspect Photo
+                                <Eye className="w-3.5 h-3.5" /> {isTamil ? 'புகைப்படத்தை ஆய்வு செய்' : 'Inspect Photo'}
                               </div>
                             </button>
                           </div>
@@ -297,7 +391,7 @@ export default function FarmerDashboard() {
                         <div className="mt-3 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[10px] text-slate-400">
                           <span>{rev.created_at ? new Date(rev.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
                           {rev.is_waste_reported && (
-                            <span className="font-bold text-rose-600">Waste / Damage Reported</span>
+                            <span className="font-bold text-rose-600">{isTamil ? 'கழிவு / சேதம் தெரிவிக்கப்பட்டது' : 'Waste / Damage Reported'}</span>
                           )}
                         </div>
                       </div>
@@ -308,9 +402,13 @@ export default function FarmerDashboard() {
             ) : (
               <div className="text-center py-8 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2 opacity-70" />
-                <h4 className="text-sm font-bold text-slate-800">No Feedback Received Yet</h4>
+                <h4 className="text-sm font-bold text-slate-800">
+                  {isTamil ? 'கருத்துகள் எதுவும் இன்னும் வரவில்லை' : 'No Feedback Received Yet'}
+                </h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  When buyers receive your delivered harvest orders and rate the produce with photos, their inspection feedback will appear here.
+                  {isTamil 
+                    ? 'வாங்குபவர்கள் உங்கள் விளைபொருட்களைப் பெற்று புகைப்படங்களுடன் மதிப்பிடும்போது, அவர்களின் கருத்துகள் இங்கே தோன்றும்.' 
+                    : 'When buyers receive your delivered harvest orders and rate the produce with photos, their inspection feedback will appear here.'}
                 </p>
               </div>
             )}
@@ -416,17 +514,17 @@ export default function FarmerDashboard() {
         >
           <div>
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-              <Truck className="w-5 h-5" />
+              <Warehouse className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-slate-900 group-hover:text-purple-700 transition-colors">
-              {t('dashboard.fleetTracking', 'Fleet & Live Tracking')}
+              {t('dashboard.warehouseTransport', 'Warehouse Delivery & Transport')}
             </h3>
             <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-              {t('dashboard.fleetTrackingDesc', 'Monitor active transporter pickup coordinates and transit schedules.')}
+              {t('dashboard.warehouseTransportDesc', 'Directly drop your produce at your District Central Warehouse (₹0 cost), or apply for pickup transport if you lack vehicle facilities.')}
             </p>
           </div>
           <div className="flex items-center gap-1 text-xs font-semibold text-purple-700 mt-4 pt-3 border-t border-slate-100">
-            <span>{t('dashboard.trackVehicles', 'Track Vehicles')}</span>
+            <span>{t('dashboard.viewWarehouseTransport', 'Warehouse & Pickup')}</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </div>
         </Link>

@@ -16,9 +16,12 @@ env/
 # Node
 node_modules/
 frontend/node_modules/
+video/node_modules/
 
 # Build
 frontend/dist/
+video/out/
+*.apk
 
 # IDE
 .vscode/

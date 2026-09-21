@@ -12,8 +12,10 @@ import {
   ShoppingBag
 } from 'lucide-react'
 import { submitReview } from '../services/api.js'
+import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function ReviewModal({ isOpen, onClose, order, existingReview = null, onReviewSubmitted }) {
+  const { t, isTamil } = useLanguage()
   const [selectedItemId, setSelectedItemId] = useState('')
   const [rating, setRating] = useState(5)
   const [hoverRating, setHoverRating] = useState(0)
@@ -107,11 +109,11 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
   }
 
   const ratingDescriptions = {
-    1: '1/5 - Very Bad / Waste / Rotten Vegetables',
-    2: '2/5 - Poor Quality / Damaged Produce',
-    3: '3/5 - Average Harvest Quality',
-    4: '4/5 - Good & Fresh Produce',
-    5: '5/5 - Outstanding Fresh Quality!'
+    1: t('reviewModal.rating1', '1/5 - Very Bad / Waste / Rotten Vegetables'),
+    2: t('reviewModal.rating2', '2/5 - Poor Quality / Damaged Produce'),
+    3: t('reviewModal.rating3', '3/5 - Average Harvest Quality'),
+    4: t('reviewModal.rating4', '4/5 - Good & Fresh Produce'),
+    5: t('reviewModal.rating5', '5/5 - Outstanding Fresh Quality!')
   }
 
   const isWaste = rating <= 2
@@ -136,9 +138,11 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
             </span>
             <div>
               <h3 className="text-xl font-extrabold text-slate-900">
-                {existingReview && !isEditing ? 'Customer Review Details' : 'Produce Feedback & Quality Rating'}
+                {existingReview && !isEditing ? t('reviewModal.viewTitle', 'Customer Review Details') : t('reviewModal.title', 'Produce Feedback & Quality Rating')}
               </h3>
-              <p className="text-xs text-slate-500">Order #{order.id} &bull; Direct Farm Fulfillment</p>
+              <p className="text-xs text-slate-500">
+                {t('orders.orderNumber', 'Order')} #{order.id} &bull; {t('reviewModal.directFulfillment', 'Direct Farm Fulfillment')}
+              </p>
             </div>
           </div>
         </div>
@@ -180,13 +184,13 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                 </div>
                 {existingReview.is_waste_reported && (
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
-                    Quality Issue Flagged
+                    {t('reviewModal.qualityIssueFlagged', 'Quality Issue Flagged')}
                   </span>
                 )}
               </div>
 
               <div className="text-xs text-slate-600">
-                <span className="font-semibold text-slate-800">Produce: </span>
+                <span className="font-semibold text-slate-800">{t('reviewModal.produceLabel', 'Produce')}: </span>
                 {existingReview.product_name}
               </div>
 
@@ -200,7 +204,7 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
               {imagePreview && (
                 <div>
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Uploaded Produce Photo Evidence
+                    {t('reviewModal.uploadedEvidence', 'Uploaded Produce Photo Evidence')}
                   </p>
                   <div className="relative rounded-2xl overflow-hidden border border-slate-200 group max-h-56 bg-black/5 flex items-center justify-center">
                     <img
@@ -219,14 +223,14 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                 onClick={() => setIsEditing(true)}
                 className="btn-secondary text-xs py-2 px-4"
               >
-                Edit My Feedback
+                {t('reviewModal.editFeedback', 'Edit My Feedback')}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="btn-primary text-xs py-2 px-5"
               >
-                Done
+                {t('common.done', 'Done')}
               </button>
             </div>
           </div>
@@ -238,7 +242,7 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
             {items.length > 1 && (
               <div>
                 <label className="label text-xs font-bold text-slate-700 mb-1">
-                  Select Produce to Review
+                  {t('reviewModal.selectProduce', 'Select Produce to Review')}
                 </label>
                 <select
                   value={selectedItemId}
@@ -257,14 +261,14 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
             {items.length === 1 && (
               <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2 text-xs text-slate-700">
                 <ShoppingBag className="w-4 h-4 text-leaf-600 shrink-0" />
-                <span>Reviewing: <b>{items[0]?.product_name}</b> ({items[0]?.quantity} kg)</span>
+                <span>{t('reviewModal.reviewing', 'Reviewing')}: <b>{items[0]?.product_name}</b> ({items[0]?.quantity} kg)</span>
               </div>
             )}
 
             {/* Interactive 5-Star Selector */}
             <div>
               <label className="label text-xs font-bold text-slate-700 mb-1">
-                Quality Rating (1 to 5 Stars)
+                {t('reviewModal.qualityRating', 'Quality Rating (1 to 5 Stars)')}
               </label>
               <div className="flex items-center gap-2 py-1">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -296,9 +300,9 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
               <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
-                  <span className="font-bold text-amber-950">Produce Quality Issue / Waste Veg Report</span>
+                  <span className="font-bold text-amber-950">{t('reviewModal.wasteAlertTitle', 'Produce Quality Issue / Waste Veg Report')}</span>
                   <p className="text-[11px] text-amber-800 mt-0.5">
-                    Please take a photo of the waste/damaged vegetables below. This evidence will be immediately flagged to the farmer so quality standards are upheld.
+                    {t('reviewModal.wasteAlertDesc', 'Please take a photo of the waste/damaged vegetables below. This evidence will be immediately flagged to the farmer so quality standards are upheld.')}
                   </p>
                 </div>
               </div>
@@ -307,12 +311,12 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
             {/* Review Comment Area */}
             <div>
               <label className="label text-xs font-bold text-slate-700 mb-1">
-                Detailed Feedback / Notes for Farmer & Next Buyers
+                {t('reviewModal.notesLabel', 'Detailed Feedback / Notes for Farmer & Next Buyers')}
               </label>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Share your experience: freshness, condition, taste, or any rotten/waste produce noticed upon delivery..."
+                placeholder={t('reviewModal.placeholder', 'Share your experience: freshness, condition, taste, or any rotten/waste produce noticed upon delivery...')}
                 rows={3}
                 className="input text-xs resize-none"
               />
@@ -321,8 +325,8 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
             {/* Photo Upload Box */}
             <div>
               <label className="label text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Upload Produce Photo (Proof of Quality / Waste)</span>
-                <span className="text-[10px] text-slate-400 font-normal">Optional but Recommended</span>
+                <span>{t('reviewModal.uploadPhoto', 'Upload Produce Photo (Proof of Quality / Waste)')}</span>
+                <span className="text-[10px] text-slate-400 font-normal">{t('reviewModal.optional', 'Optional but Recommended')}</span>
               </label>
 
               {imagePreview ? (
@@ -334,15 +338,15 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                   />
                   <div className="flex-1 text-xs">
                     <p className="font-bold text-slate-800 truncate">
-                      {imageFile ? imageFile.name : 'Uploaded Produce Photo'}
+                      {imageFile ? imageFile.name : t('reviewModal.uploadedProducePhoto', 'Uploaded Produce Photo')}
                     </p>
-                    <p className="text-[11px] text-slate-400">Photo will be verified and displayed to farmer & buyers</p>
+                    <p className="text-[11px] text-slate-400">{t('reviewModal.photoVerifiedNotice', 'Photo will be verified and displayed to farmer & buyers')}</p>
                     <button
                       type="button"
                       onClick={handleRemoveImage}
                       className="mt-1 text-rose-600 hover:text-rose-700 text-xs font-bold flex items-center gap-1"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Remove Photo
+                      <Trash2 className="w-3.5 h-3.5" /> {t('reviewModal.removePhoto', 'Remove Photo')}
                     </button>
                   </div>
                 </div>
@@ -358,10 +362,10 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                     <Camera className="w-5 h-5" />
                   </div>
                   <span className="text-xs font-bold text-slate-700 group-hover:text-amber-900">
-                    Click to take photo or choose file
+                    {t('reviewModal.clickToUpload', 'Click to take photo or choose file')}
                   </span>
                   <span className="text-[10px] text-slate-400 mt-0.5">
-                    JPG, PNG, or WEBP up to 10MB
+                    {t('reviewModal.formatLimit', 'JPG, PNG, or WEBP up to 10MB')}
                   </span>
                 </label>
               )}
@@ -375,7 +379,7 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                 disabled={submitting}
                 className="btn-secondary text-xs py-2 px-4"
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -383,11 +387,11 @@ export default function ReviewModal({ isOpen, onClose, order, existingReview = n
                 className="btn-primary text-xs py-2 px-6 font-bold shadow-soft flex items-center gap-1.5"
               >
                 {submitting ? (
-                  <span>Submitting Feedback...</span>
+                  <span>{t('reviewModal.submitting', 'Submitting Feedback...')}</span>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Submit Produce Feedback</span>
+                    <span>{t('reviewModal.submitBtn', 'Submit Produce Feedback')}</span>
                   </>
                 )}
               </button>

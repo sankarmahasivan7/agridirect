@@ -41,6 +41,7 @@ import {
   acceptBatch,
   updateBatchStatus,
 } from '../../services/api.js'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 
 const BATCH_STAGES = [
   { key: 'BATCH_CREATED', label: 'Created', desc: 'Orders Batched' },
@@ -128,13 +129,19 @@ function earliestBatchDeliveryTime(batch) {
 }
 
 function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvailable, isActive, isCompleted }) {
+  const { t, isTamil } = useLanguage()
   const [expanded, setExpanded] = useState(false)
+  const [stopOtps, setStopOtps] = useState({})
   const stageIdx = getBatchStageIndex(batch.status)
   const nextActions = BATCH_NEXT_ACTIONS[batch.status] || []
   const isUpdating = updatingId === batch.id
 
   const pickupStops = (batch.stops || []).filter((s) => s.stop_type === 'PICKUP')
   const deliveryStops = (batch.stops || []).filter((s) => s.stop_type === 'DELIVERY')
+
+  const allBatchOtpsFilled = deliveryStops.length > 0
+    ? deliveryStops.every(s => (stopOtps[s.order_id || s.id] || '').trim().length === 6)
+    : true
 
   // Future Produce Availability & Warehouse Pickup Lock
   const todayStr = new Date().toISOString().split('T')[0]
@@ -396,6 +403,53 @@ function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvai
         </div>
       )}
 
+      {/* Buyer Delivery OTP Verification Section */}
+      {isActive && nextActions.some((act) => act.next === 'DELIVERED') && (
+        <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 mb-3 text-xs">
+          <div className="flex items-center gap-2 mb-2 font-bold text-indigo-950">
+            <ShieldCheck className="w-4 h-4 text-indigo-600" />
+            <span>Buyer Delivery Verification (OTP Required)</span>
+          </div>
+          <p className="text-slate-600 mb-3 text-[11px]">
+            To complete delivery, request the 6-digit verification code from each buyer upon arrival. The "Mark All Deliveries Completed" button will unlock once all customer OTPs are entered.
+          </p>
+          <div className="space-y-2">
+            {deliveryStops.map((stop) => {
+              const stopKey = stop.order_id || stop.id
+              const curOtp = stopOtps[stopKey] || ''
+              return (
+                <div key={stop.id} className="flex flex-wrap items-center justify-between gap-2 p-2 bg-white rounded-lg border border-indigo-100">
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 text-xs truncate">
+                      {stop.customer_name || 'Customer'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 truncate">{stop.location_name}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="6-digit OTP"
+                      value={curOtp}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                        setStopOtps((prev) => ({ ...prev, [stopKey]: val }))
+                      }}
+                      className="w-28 px-2.5 py-1 text-center font-mono font-bold tracking-widest text-xs border rounded-md border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30"
+                    />
+                    {curOtp.length === 6 ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 shrink-0">6 digits</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
         {isAvailable && (
@@ -412,7 +466,8 @@ function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvai
         {isActive && nextActions.map((act) => {
           const isPickupAction = act.next === 'READY_FOR_PICKUP' || act.next === 'PICKED_UP'
           const isDeliveryAction = act.next === 'DELIVERED'
-          const isActionLocked = (isPickupAction && isPickupLocked) || (isDeliveryAction && isDeliveryLocked)
+          const isOtpMissing = isDeliveryAction && !allBatchOtpsFilled
+          const isActionLocked = (isPickupAction && isPickupLocked) || (isDeliveryAction && isDeliveryLocked) || isOtpMissing
           const disabled = isUpdating || isActionLocked
 
           let actionLabel = act.label
@@ -420,18 +475,31 @@ function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvai
             actionLabel = `🔒 Warehouse Pickup Unlocks on ${shortBatchAvailDate}`
           } else if (isDeliveryAction && isDeliveryLocked) {
             actionLabel = `⏳ In Transit... (Unlocks in ${timeFormatted})`
+          } else if (isDeliveryAction && isOtpMissing) {
+            actionLabel = `🔒 Enter Buyer OTP to Complete Delivery`
+          }
+
+          const handleClick = () => {
+            if (isDeliveryAction) {
+              const combinedOtp = Object.values(stopOtps).join(',')
+              onStatusChange(batch.id, act.next, combinedOtp)
+            } else {
+              onStatusChange(batch.id, act.next)
+            }
           }
 
           return (
             <button
               key={act.next}
-              onClick={() => onStatusChange(batch.id, act.next)}
+              onClick={handleClick}
               disabled={disabled}
               title={
                 isPickupAction && isPickupLocked
                   ? `Produce has not been harvested/deposited yet. Warehouse pickup unlocks on ${formattedBatchAvailDate}.`
                   : isDeliveryAction && isDeliveryLocked
                   ? `Minimum transit duration enforced. Unlocks at ${batchEta.toLocaleTimeString()}`
+                  : isDeliveryAction && isOtpMissing
+                  ? 'Buyer OTP verification required before delivery can be marked completed.'
                   : undefined
               }
               className={`px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -444,6 +512,8 @@ function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvai
                 <Clock className="w-3.5 h-3.5" />
               ) : isDeliveryAction && isDeliveryLocked ? (
                 <Clock className="w-3.5 h-3.5 animate-pulse" />
+              ) : isDeliveryAction && isOtpMissing ? (
+                <ShieldCheck className="w-3.5 h-3.5" />
               ) : (
                 <Play className="w-3.5 h-3.5" />
               )}
@@ -464,7 +534,8 @@ function DeliveryBatchCard({ batch, onAccept, onStatusChange, updatingId, isAvai
 }
 
 export default function TransporterDashboard() {
-  const [activeTab, setActiveTab] = useState('available') // 'available' | 'active' | 'completed'
+  const { t, isTamil } = useLanguage()
+  const [activeTab, setActiveTab] = useState('ai_route') // 'ai_route' (Recommended) | 'available' | 'active' | 'completed'
   const [availableList, setAvailableList] = useState([])
   const [myJobsList, setMyJobsList] = useState([])
   const [availableBatchesList, setAvailableBatchesList] = useState([])
@@ -475,6 +546,7 @@ export default function TransporterDashboard() {
   const [locLoading, setLocLoading] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [jobOtps, setJobOtps] = useState({})
 
   // AI Optimized Route state
   const [routeOpt, setRouteOpt] = useState(null)
@@ -507,17 +579,41 @@ export default function TransporterDashboard() {
       })
   }
 
-  const handleExplainPlan = async (plan) => {
-    const key = plan.plan_code || `${plan.vehicle_name}-${plan.destination_area}`
+  const handleExplainPlan = async (plan, explicitKey) => {
+    const key = explicitKey || plan.plan_code || `${plan.vehicle_name}-${plan.destination_area}`
+    
+    // Toggle: if already open, close it
+    if (planExplanations[key]) {
+      setPlanExplanations((prev) => {
+        const copy = { ...prev }
+        delete copy[key]
+        return copy
+      })
+      return
+    }
+
     setExplainingKey(key)
     try {
       const res = await explainAiRoute({ route_plan: plan })
-      setPlanExplanations((prev) => ({ ...prev, [key]: res.data.explanation }))
+      if (res.data?.explanation) {
+        setPlanExplanations((prev) => ({ ...prev, [key]: res.data.explanation }))
+      } else {
+        throw new Error('Empty AI explanation response')
+      }
     } catch (err) {
-      console.error('Failed to explain route:', err)
+      console.warn('Backend explain endpoint fallback:', err)
+      const isBike = plan.vehicle_category === 'Bike'
+      const stops = plan.stops || []
+      const pickupCount = stops.filter((s) => s.stop_type === 'PICKUP').length
+      const dropCount = stops.filter((s) => s.stop_type === 'DELIVERY').length
+      const fallback = isBike
+        ? `AI Logistics Decision: Assigned ${plan.vehicle_name} (Bike) because total cargo is ${plan.cargo_weight_kg} kg (within the 50 kg bike payload limit). Bikes dispatch immediately without waiting for a 35% truck fill threshold, fulfilling ${plan.total_orders_count} orders over ~${plan.estimated_road_distance_km} km.`
+        : (plan.dispatch_eligible
+            ? `AI Logistics Decision: Combined ${plan.total_orders_count} orders into ${plan.vehicle_name}. Cargo of ${plan.cargo_weight_kg} kg achieves ${plan.fill_percentage}% capacity fill (meets ≥35% threshold). Sequenced ${pickupCount} warehouse pickup(s) and ${dropCount} delivery drops to optimize road distance.`
+            : `AI Logistics Decision: Consolidated ${plan.total_orders_count} orders (${plan.cargo_weight_kg} kg) for ${plan.vehicle_name}. Fill level is ${plan.fill_percentage}%, which is below the mandatory 35% dispatch threshold (${plan.minimum_dispatch_kg} kg). Consignment is held to combine with incoming orders in ${plan.destination_area} to prevent fuel waste.`)
       setPlanExplanations((prev) => ({
         ...prev,
-        [key]: 'Unable to fetch AI explanation. Please ensure connection to Gemini backend is active.',
+        [key]: fallback,
       }))
     } finally {
       setExplainingKey(null)
@@ -554,7 +650,10 @@ export default function TransporterDashboard() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+    loadOptimizedRoutes()
+  }, [])
 
   // Re-render every 1s so the "Mark Delivered" button and countdown timer update smoothly
   const [, forceTick] = useState(0)
@@ -579,14 +678,19 @@ export default function TransporterDashboard() {
     }
   }
 
-  const handleStatusChange = async (id, newStatus) => {
+  const handleStatusChange = async (id, newStatus, otp = null) => {
+    if (newStatus === 'CANCELLED') {
+      const confirmCancel = window.confirm('Are you sure you want to cancel this consignment? It will be removed from your active deliveries.')
+      if (!confirmCancel) return
+    }
     setError('')
     setSuccessMsg('')
     setUpdatingId(id)
     try {
-      await updateTransportJobStatus(id, newStatus)
+      await updateTransportJobStatus(id, newStatus, otp)
       setSuccessMsg(`Consignment #${id} updated to ${newStatus}.`)
       load()
+      loadOptimizedRoutes()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not update status.')
     } finally {
@@ -679,14 +783,19 @@ export default function TransporterDashboard() {
     }
   }
 
-  const handleBatchStatusChange = async (batchId, nextStatus) => {
+  const handleBatchStatusChange = async (batchId, nextStatus, otp = null) => {
+    if (nextStatus === 'CANCELLED') {
+      const confirmCancel = window.confirm('Are you sure you want to cancel this batch? It will be removed from your active deliveries.')
+      if (!confirmCancel) return
+    }
     setError('')
     setSuccessMsg('')
     setUpdatingId(batchId)
     try {
-      await updateBatchStatus(batchId, nextStatus)
+      await updateBatchStatus(batchId, nextStatus, otp)
       setSuccessMsg(`Consolidated Batch transitioned to ${nextStatus}.`)
       load()
+      loadOptimizedRoutes()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not update batch status.')
     } finally {
@@ -744,28 +853,27 @@ export default function TransporterDashboard() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-700/50 text-sky-200 text-xs font-semibold mb-3 border border-sky-600/50">
               <Compass className="w-3.5 h-3.5 text-sky-300" />
-              AgriDirect Real-Time Fleet & Logistics Dispatch
+              {t('transporter.dashboardTitle', 'Fleet & Dispatch Command')}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold font-display">Transporter Fleet Hub</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold font-display">{t('transporter.dashboardTitle', 'Transporter Fleet Hub')}</h1>
             <p className="text-sky-200 text-sm mt-1 max-w-xl">
-              Accept real farm crop delivery jobs, track consignment stages, and broadcast live GPS coordinates to buyers and sellers.
+              {t('transporter.dashboardSubtitle', 'Accept real farm crop delivery jobs, track consignment stages, and broadcast live GPS coordinates to buyers and sellers.')}
             </p>
           </div>
           <div className="flex flex-wrap gap-2.5">
             <button
               onClick={handleShareLocation}
               disabled={locLoading}
-              className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-sky-950 font-bold text-sm flex items-center gap-2 transition shadow-md disabled:opacity-50"
+              className="btn-primary flex items-center gap-2 text-xs py-2.5 px-4 shadow-lg shadow-leaf-950/20"
             >
-              <Navigation className={`w-4 h-4 ${locLoading ? 'animate-spin' : ''}`} />
-              {locLoading ? 'Locating...' : 'Broadcast Live GPS'}
+              <MapPin className={`w-4 h-4 ${locLoading ? 'animate-bounce' : ''}`} />
+              {locLoading ? t('common.loading', 'Loading...') : t('transporter.trackGps', 'Broadcast Live GPS')}
             </button>
             <button
-              onClick={() => setShowManual((s) => !s)}
-              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold flex items-center gap-2 transition backdrop-blur-sm border border-white/10"
+              onClick={() => setShowManual(!showManual)}
+              className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition border border-white/20"
             >
-              <Edit3 className="w-4 h-4" />
-              Manual Coordinate
+              {showManual ? t('common.close', 'Close Manual') : t('common.edit', 'Manual GPS / Town')}
             </button>
           </div>
         </div>
@@ -779,18 +887,16 @@ export default function TransporterDashboard() {
         </div>
       )}
 
-      {/* Manual Geocode / Coordinate Input Fallback */}
+      {/* Manual Geolocation Fallback Box */}
       {showManual && (
-        <div className="card p-5 mb-6 border border-sky-200 bg-sky-50/40 shadow-sm animate-fade-in">
+        <div className="card p-5 border border-sky-200 bg-sky-50/40 rounded-2xl mb-6 text-slate-800 animate-fadeIn">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-sky-600" /> Set Vehicle Location Manually
+            <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-sky-600" />
+              Set Vehicle Location Manually (OpenStreetMap Search)
             </h3>
-            <button onClick={() => setShowManual(false)} className="text-xs text-gray-400 hover:text-gray-600">Close</button>
+            <span className="text-[11px] text-slate-500">Free, no Google API key required</span>
           </div>
-          <p className="text-xs text-gray-600 mb-3">
-            Search town or district name, or enter latitude and longitude coordinates directly.
-          </p>
 
           <form onSubmit={handlePlaceSearch} className="flex gap-2 mb-3">
             <input
@@ -800,7 +906,7 @@ export default function TransporterDashboard() {
               onChange={(e) => setPlaceQuery(e.target.value)}
             />
             <button className="btn-secondary text-sm whitespace-nowrap" type="submit" disabled={searching}>
-              {searching ? 'Searching...' : 'Search Town'}
+              {searching ? t('common.loading', 'Searching...') : t('common.search', 'Search Town')}
             </button>
           </form>
 
@@ -845,7 +951,7 @@ export default function TransporterDashboard() {
                 />
               </div>
               <button className="btn-primary text-xs py-2.5 px-4" type="submit">
-                Save Coordinates
+                {t('common.save', 'Save Coordinates')}
               </button>
             </form>
           </div>
@@ -870,7 +976,7 @@ export default function TransporterDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="card p-4 border border-slate-200 bg-white">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Jobs</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('transporter.tabAvailableJobs', 'Available Jobs')}</span>
             <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
               <Box className="w-4 h-4" />
             </span>
@@ -883,7 +989,7 @@ export default function TransporterDashboard() {
 
         <div className="card p-4 border border-slate-200 bg-white">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Shipments</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('shipments.activeTrips', 'Active Shipments')}</span>
             <span className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-sm">
               <Truck className="w-4 h-4" />
             </span>
@@ -896,7 +1002,7 @@ export default function TransporterDashboard() {
 
         <div className="card p-4 border border-slate-200 bg-white">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed Deliveries</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('transporter.tabCompletedTrips', 'Completed Deliveries')}</span>
             <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
               <CheckCircle2 className="w-4 h-4" />
             </span>
@@ -910,17 +1016,40 @@ export default function TransporterDashboard() {
 
       {/* Tabs Navigation */}
       <div className="flex items-center justify-between border-b border-slate-200 mb-6">
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto">
+          <button
+            onClick={() => {
+              setActiveTab('ai_route')
+              loadOptimizedRoutes()
+            }}
+            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+              activeTab === 'ai_route'
+                ? 'border-indigo-600 text-indigo-700 bg-indigo-50/40 rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-indigo-600" />
+            {t('transporter.tabRouteOpt', 'AI Optimized Routes')}
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-100 text-indigo-800 font-extrabold uppercase">
+              Recommended Trip
+            </span>
+            {aiPlans?.dispatch_plans?.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800 font-black">
+                {aiPlans.dispatch_plans.length} Ready
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setActiveTab('available')}
-            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition ${
+            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
               activeTab === 'available'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Box className="w-4 h-4" />
-            Available Transport Jobs
+            {t('transporter.tabAvailableBatches', 'Available Consignments')}
             {availableBatchesList.length + availableList.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800 font-extrabold">
                 {availableBatchesList.length + availableList.length}
@@ -930,14 +1059,14 @@ export default function TransporterDashboard() {
 
           <button
             onClick={() => setActiveTab('active')}
-            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition ${
+            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
               activeTab === 'active'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Truck className="w-4 h-4" />
-            Active Consignments
+            {t('transporter.tabActiveTrips', 'Active Consignments')}
             {activeBatches.length + activeJobs.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-xs bg-sky-100 text-sky-800 font-extrabold">
                 {activeBatches.length + activeJobs.length}
@@ -947,33 +1076,15 @@ export default function TransporterDashboard() {
 
           <button
             onClick={() => setActiveTab('completed')}
-            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition ${
+            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
               activeTab === 'completed'
                 ? 'border-sky-600 text-sky-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            Completed Deliveries
+            {t('transporter.tabCompletedTrips', 'Completed Deliveries')}
             <span className="text-xs text-slate-400">({completedBatches.length + completedJobs.length})</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab('ai_route')
-              loadOptimizedRoutes()
-            }}
-            className={`pb-3 px-3 text-sm font-bold flex items-center gap-2 border-b-2 transition ${
-              activeTab === 'ai_route'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            AI Optimized Route
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-100 text-indigo-800 font-extrabold uppercase">
-              OR-Tools
-            </span>
           </button>
         </div>
 
@@ -981,7 +1092,7 @@ export default function TransporterDashboard() {
           onClick={load}
           className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-semibold pb-3"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh', 'Refresh')}
         </button>
       </div>
 
@@ -1003,9 +1114,9 @@ export default function TransporterDashboard() {
               <div className="w-16 h-16 bg-sky-50 text-sky-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Box className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">No Available Jobs at the Moment</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">{t('transporter.noJobs', 'No Available Jobs at the Moment')}</h3>
               <p className="text-gray-500 text-sm max-w-md mx-auto">
-                When buyers place orders matching your vehicle's payload capacity, new transport jobs and consolidated delivery batches will appear here in real time.
+                {t('transporter.noJobsDesc', 'There are no pending hub or farm pickups available right now. Check back soon or pull down to refresh.')}
               </p>
             </div>
           ) : (
@@ -1159,9 +1270,9 @@ export default function TransporterDashboard() {
               <div className="w-16 h-16 bg-sky-50 text-sky-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Truck className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">No Active Consignments</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">{t('transporter.noConsignments', 'No Active Consignments')}</h3>
               <p className="text-gray-500 text-sm max-w-md mx-auto">
-                You have no active consignments in progress. Switch to the <b>Available Jobs</b> tab to claim upcoming deliveries.
+                {t('transporter.noConsignmentsDesc', 'You do not have any trips in progress. Accept an available job to start delivering.')}
               </p>
             </div>
           ) : (
@@ -1372,13 +1483,47 @@ export default function TransporterDashboard() {
                           </div>
                         )}
 
+                        {/* Buyer Delivery OTP Verification Section */}
+                        {actions.some((a) => a.value === 'DELIVERED') && (
+                          <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 mb-4 text-xs">
+                            <div className="flex items-center gap-2 mb-1.5 font-bold text-indigo-950">
+                              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                              <span>Buyer Delivery Verification (OTP Required)</span>
+                            </div>
+                            <p className="text-slate-600 mb-2.5 text-[11px]">
+                              Ask the buyer at the destination for their 6-digit delivery OTP. The "Mark Delivered" button is locked until you enter the matching OTP.
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="text"
+                                maxLength={6}
+                                placeholder="Enter 6-digit OTP"
+                                value={jobOtps[r.id] || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                                  setJobOtps((prev) => ({ ...prev, [r.id]: val }))
+                                }}
+                                className="w-40 px-3 py-1.5 text-center font-mono font-bold tracking-widest text-sm border rounded-lg border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                              />
+                              {(jobOtps[r.id] || '').length === 6 ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-xs bg-emerald-100 px-2 py-1 rounded-md">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Ready to Deliver
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs font-medium">6 digits required to unlock</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Action Buttons */}
                         {actions.length > 0 && (
                           <div className="flex flex-wrap gap-2.5 pt-2 border-t border-slate-100">
                             {actions.map((a) => {
                               const isPickupAction = a.value === 'PICKUP'
                               const isDeliveredAction = a.value === 'DELIVERED'
-                              const actionLocked = (isPickupAction && isPickupLocked) || (isDeliveredAction && deliveryLocked)
+                              const isOtpMissing = isDeliveredAction && (jobOtps[r.id] || '').trim().length !== 6
+                              const actionLocked = (isPickupAction && isPickupLocked) || (isDeliveredAction && deliveryLocked) || isOtpMissing
                               const disabled = updatingId === r.id || actionLocked
                               const Icon = a.icon || Play
 
@@ -1387,6 +1532,8 @@ export default function TransporterDashboard() {
                                 btnLabel = `🔒 Warehouse Pickup Unlocks on ${shortReqAvailDate}`
                               } else if (isDeliveredAction && deliveryLocked) {
                                 btnLabel = `⏳ In Transit... (Unlocks in ${jobTimeFormatted})`
+                              } else if (isDeliveredAction && isOtpMissing) {
+                                btnLabel = `🔒 Enter Buyer OTP to Unlock`
                               }
 
                               return (
@@ -1398,9 +1545,11 @@ export default function TransporterDashboard() {
                                       ? `Produce not yet deposited by farmer. Pickup unlocks on ${formattedReqAvailDate}.`
                                       : isDeliveredAction && deliveryLocked
                                       ? `Available after ${eta.toLocaleTimeString()}`
+                                      : isDeliveredAction && isOtpMissing
+                                      ? 'Enter the 6-digit OTP provided by the buyer to unlock delivery.'
                                       : undefined
                                   }
-                                  onClick={() => handleStatusChange(r.id, a.value)}
+                                  onClick={() => handleStatusChange(r.id, a.value, isDeliveredAction ? (jobOtps[r.id] || '').trim() : null)}
                                   className={
                                     a.value === 'CANCELLED'
                                       ? 'text-red-600 text-xs font-semibold px-4 py-2 hover:bg-red-50 rounded-xl transition disabled:opacity-40'
@@ -1411,7 +1560,11 @@ export default function TransporterDashboard() {
                                       : 'btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed'
                                   }
                                 >
-                                  <Icon className={`w-3.5 h-3.5 ${isDeliveredAction && deliveryLocked ? 'animate-pulse' : ''}`} />
+                                  {isDeliveredAction && isOtpMissing ? (
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Icon className={`w-3.5 h-3.5 ${isDeliveredAction && deliveryLocked ? 'animate-pulse' : ''}`} />
+                                  )}
                                   {updatingId === r.id ? 'Updating...' : btnLabel}
                                 </button>
                               )
@@ -1436,9 +1589,9 @@ export default function TransporterDashboard() {
               <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">No Completed Deliveries Yet</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">{t('transporter.noCompleted', 'No Completed Deliveries Yet')}</h3>
               <p className="text-gray-500 text-sm max-w-md mx-auto">
-                Once consignments are delivered and verified, their earnings summary and delivery timestamps will be archived here.
+                {t('transporter.noCompletedDesc', 'Deliveries completed by your fleet will be archived here for payout reconciliation.')}
               </p>
             </div>
           ) : (
@@ -1552,10 +1705,9 @@ export default function TransporterDashboard() {
               <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 mb-2">
                 AI OPTIMIZED ROUTE
               </span>
-              <h3 className="text-lg font-bold text-slate-900 mb-1">No Real Logistics Jobs Available</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">{t('transporter.noRealJobs', 'No Real Logistics Jobs Available')}</h3>
               <p className="text-slate-500 text-xs max-w-md mx-auto mb-4 leading-relaxed">
-                There are currently no real pending or active delivery jobs in the database for route optimization. 
-                AgriDirect strictly optimizes actual consignments and never generates simulated or fake routes.
+                {t('transporter.noRealJobsDesc', 'No active orders require freight transport currently. Check back later or refresh.')}
               </p>
               <button onClick={load} className="btn-secondary text-xs">
                 Check for New Jobs
@@ -1620,7 +1772,7 @@ export default function TransporterDashboard() {
 
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => handleExplainPlan(plan)}
+                                  onClick={() => handleExplainPlan(plan, planKey)}
                                   disabled={explainingKey === planKey}
                                   className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold border border-indigo-200 flex items-center gap-1.5 transition"
                                 >
@@ -1724,12 +1876,21 @@ export default function TransporterDashboard() {
                                 </span>
                               </div>
                               <button
-                                onClick={() => handleExplainPlan(plan)}
+                                type="button"
+                                onClick={() => handleExplainPlan(plan, planKey)}
                                 disabled={explainingKey === planKey}
-                                className="px-2.5 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs flex items-center gap-1"
+                                className={`px-2.5 py-1 rounded font-bold text-xs flex items-center gap-1 transition ${
+                                  planExplanations[planKey]
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                                }`}
                               >
-                                <Sparkles className="w-3 h-3 text-amber-700" />
-                                {explainingKey === planKey ? 'Explaining...' : 'Why Held?'}
+                                <Sparkles className={`w-3 h-3 ${explainingKey === planKey ? 'animate-spin' : ''}`} />
+                                {explainingKey === planKey
+                                  ? 'Explaining...'
+                                  : planExplanations[planKey]
+                                  ? 'Hide Reason'
+                                  : 'Why Held?'}
                               </button>
                             </div>
                             <p className="text-xs text-slate-600 mb-2">{plan.rule_explanation}</p>

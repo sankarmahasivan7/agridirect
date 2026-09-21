@@ -46,10 +46,27 @@ export default {
         sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
+        '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+        'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
         'soft-lg': '0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+        'soft-2xl': '0 20px 40px -15px rgba(0, 0, 0, 0.12)',
+        'glass': '0 8px 30px rgba(0, 0, 0, 0.05)',
+        'glass-card': '0 4px 24px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.02)',
         'glow-green': '0 0 25px -5px rgba(34, 197, 94, 0.35)',
+        'glow-emerald': '0 0 30px -5px rgba(16, 185, 129, 0.40)',
+        'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.35)',
         'glow-ai': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+      },
+      animation: {
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'float': 'none',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(0px)' },
+        }
       }
     },
   },

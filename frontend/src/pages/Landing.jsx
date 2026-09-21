@@ -89,35 +89,49 @@ export default function Landing() {
     <div className="min-h-screen">
       
       {/* Hero Section */}
-      <section className="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-28">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(45rem_50rem_at_top,theme(colors.leaf.100),theme(colors.slate.50))]" />
+      <section className="relative overflow-hidden pt-14 pb-24 lg:pt-24 lg:pb-32 mesh-gradient">
+        {/* Ambient Glow Orbs */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-tr from-emerald-500/15 via-teal-400/10 to-amber-300/15 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute top-40 right-10 w-[300px] h-[300px] bg-amber-400/10 rounded-full blur-2xl pointer-events-none -z-10" />
         
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 backdrop-blur-sm border border-leaf-200/80 shadow-2xs text-xs font-bold text-leaf-800 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-            <span className="flex h-2 w-2 rounded-full bg-leaf-500 animate-ping" />
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-emerald-300/80 shadow-soft text-xs font-bold text-emerald-950 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600" />
+            </span>
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            {t('landing.pill', 'Ethical Direct Agricultural Commerce')}
+            <span>{t('landing.pill', 'Ethical Direct Agricultural Commerce')}</span>
+            <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase">
+              Live APMC
+            </span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight max-w-4xl mx-auto leading-tight sm:leading-tight lg:leading-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight max-w-4xl mx-auto leading-tight sm:leading-tight lg:leading-tight">
             {t('landing.heroTitle', 'Direct Farm-to-Table')} —{' '}
-            <span className="bg-gradient-to-r from-leaf-700 via-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-emerald-700 via-teal-600 to-emerald-500 bg-clip-text text-transparent">
               {language === 'ta' ? 'இடைத்தரகர் இல்லாமல்.' : 'Without Middlemen.'}
             </span>
           </h1>
 
-          <p className="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
             {t('landing.heroSubtitle', 'Eliminate middlemen. Connect farmers directly with buyers, institutions, and verified fleet logistics powered by honest AI pricing.')}
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/buyer/marketplace" className="btn-primary py-3.5 px-6 text-base shadow-md">
+          {/* Direct trade profit guarantee chip */}
+          <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+            <span className="font-bold text-emerald-900">🌾 Fair Trade Guarantee:</span>
+            <span>Farmers earn +₹3 to +₹6/kg above wholesale mandi benchmark</span>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
+            <Link to="/buyer/marketplace" className="btn-primary py-3.5 px-7 text-base shadow-lg shadow-emerald-700/25">
               <ShoppingBag className="w-5 h-5" />
               {t('landing.exploreMarketplace', 'Explore Marketplace')}
             </Link>
-            <Link to="/farmer/register" className="btn-secondary py-3.5 px-6 text-base shadow-2xs">
-              <Sprout className="w-5 h-5 text-leaf-600" />
+            <Link to="/farmer/register" className="btn-secondary py-3.5 px-7 text-base shadow-xs">
+              <Sprout className="w-5 h-5 text-emerald-600" />
               {t('landing.registerAsFarmer', 'Join as a Farmer')}
             </Link>
           </div>
@@ -127,14 +141,14 @@ export default function Landing() {
             {stats.map((s, idx) => {
               const Icon = s.icon
               return (
-                <div key={idx} className="card p-5 text-left flex items-start gap-3 bg-white/80 backdrop-blur-sm border border-slate-200/60 shadow-2xs">
-                  <div className="w-10 h-10 rounded-xl bg-leaf-50 border border-leaf-100 flex items-center justify-center text-leaf-700 shrink-0">
+                <div key={idx} className="glass-card p-5 text-left flex items-start gap-3.5 group">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-50 to-teal-50 border border-emerald-200/80 flex items-center justify-center text-emerald-700 shrink-0 group-hover:scale-105 transition-transform">
                     <Icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-2xl font-extrabold text-slate-900">{s.value}</div>
-                    <div className="text-xs font-semibold text-slate-700">{s.label}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{s.sub}</div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">{s.value}</div>
+                    <div className="text-xs font-bold text-slate-700">{s.label}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 font-medium">{s.sub}</div>
                   </div>
                 </div>
               )
@@ -160,18 +174,18 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {roles.map((r) => {
               const Icon = r.icon
               return (
                 <div
                   key={r.key}
-                  className={`card card-hover group flex flex-col justify-between p-6 border border-slate-200/80 transition-all duration-300 ${r.border}`}
+                  className={`glass-card group flex flex-col justify-between p-6 hover:shadow-soft-xl transition-all duration-200 ${r.border}`}
                 >
                   <div>
                     {/* Role Header */}
                     <div className="flex items-center justify-between mb-4">
-                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${r.gradient} flex items-center justify-center text-white shadow-md shadow-slate-200 group-hover:scale-105 transition-transform duration-300`}>
+                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${r.gradient} flex items-center justify-center text-white shadow-md shadow-slate-200 group-hover:scale-110 transition-transform duration-300`}>
                         <Icon className="w-6 h-6" />
                       </div>
                       <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
@@ -179,10 +193,10 @@ export default function Landing() {
                       </span>
                     </div>
 
-                    <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-leaf-800 transition-colors">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-emerald-800 transition-colors">
                       {r.label}
                     </h3>
-                    <p className="text-sm text-slate-600 mb-5 leading-relaxed">
+                    <p className="text-xs text-slate-600 mb-5 leading-relaxed min-h-[48px]">
                       {r.desc}
                     </p>
 
@@ -190,8 +204,8 @@ export default function Landing() {
                     <ul className="space-y-2 mb-6 text-xs text-slate-600 border-t border-slate-100 pt-4">
                       {r.features.map((f, fIdx) => (
                         <li key={fIdx} className="flex items-center gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-leaf-600 shrink-0" />
-                          <span>{f}</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="line-clamp-1">{f}</span>
                         </li>
                       ))}
                     </ul>
@@ -201,7 +215,7 @@ export default function Landing() {
                   <div className="space-y-2 pt-2">
                     <Link
                       to={`/${r.key}/login`}
-                      className="btn-primary w-full py-2.5 text-sm justify-center group/btn"
+                      className="btn-primary w-full py-2.5 text-sm justify-center group/btn shadow-xs"
                     >
                       <span>{r.label} {t('landing.signInRole', 'Sign In')}</span>
                       <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -210,7 +224,7 @@ export default function Landing() {
                     {r.key !== 'admin' && (
                       <Link
                         to={`/${r.key}/register`}
-                        className="btn-secondary w-full py-2 text-xs justify-center font-medium"
+                        className="btn-secondary w-full py-2 text-xs justify-center font-semibold"
                       >
                         {t('landing.registerRole', 'Register')} {r.label}
                       </Link>

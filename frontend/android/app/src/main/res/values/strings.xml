@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AgriDirect</string>
+    <string name="title_activity_main">AgriDirect</string>
+    <string name="package_name">com.agridirect.app</string>
+    <string name="custom_url_scheme">com.agridirect.app</string>
+</resources>

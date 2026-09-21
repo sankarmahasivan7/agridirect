@@ -15,16 +15,28 @@ export function AuthProvider({ children }) {
     }
   })
 
+  const logout = useCallback(() => {
+    localStorage.removeItem('agridirect_token')
+    localStorage.removeItem('agridirect_role')
+    localStorage.removeItem('agridirect_user')
+    setToken(null)
+    setRole(null)
+    setUser(null)
+  }, [])
+
   const refreshUser = useCallback(async () => {
     try {
       const res = await api.getMe()
       setUser(res.data)
       localStorage.setItem('agridirect_user', JSON.stringify(res.data))
       return res.data
-    } catch {
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout()
+      }
       return null
     }
-  }, [])
+  }, [logout])
 
   React.useEffect(() => {
     if (token) {
@@ -33,6 +45,14 @@ export function AuthProvider({ children }) {
       setUser(null)
     }
   }, [token, refreshUser])
+
+  React.useEffect(() => {
+    const handleUnauthorized = () => {
+      logout()
+    }
+    window.addEventListener('agridirect:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('agridirect:unauthorized', handleUnauthorized)
+  }, [logout])
 
   const applySession = useCallback((data) => {
     localStorage.setItem('agridirect_token', data.access_token)
@@ -78,14 +98,11 @@ export function AuthProvider({ children }) {
     return res.data
   }, [applySession])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('agridirect_token')
-    localStorage.removeItem('agridirect_role')
-    localStorage.removeItem('agridirect_user')
-    setToken(null)
-    setRole(null)
-    setUser(null)
-  }, [])
+  const loginWithGoogle = useCallback(async (payload) => {
+    const res = await api.googleLogin(payload)
+    applySession(res.data)
+    return res.data
+  }, [applySession])
 
   return (
     <AuthContext.Provider value={{
@@ -97,6 +114,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!token,
       refreshUser,
       login,
+      loginWithGoogle,
       logout,
       registerFarmer,
       registerBuyer,

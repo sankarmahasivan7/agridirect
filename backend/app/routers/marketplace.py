@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.core.config import settings
-from app.models.models import ProductListing, Product, Category
+from app.models.models import ProductListing, Product, Category, FarmerProfile
 from app.routers.listings import _serialize
 from app.schemas.schemas import ListingOut
 from app.utils.geo import haversine_km
@@ -38,7 +38,9 @@ def browse_marketplace(
     """
     query = db.query(ProductListing).options(
         joinedload(ProductListing.product).joinedload(Product.category),
-        joinedload(ProductListing.farmer), joinedload(ProductListing.fpo),
+        joinedload(ProductListing.farmer).joinedload(FarmerProfile.reviews),
+        joinedload(ProductListing.fpo),
+        joinedload(ProductListing.reviews),
     ).filter(ProductListing.is_active == True, ProductListing.quantity_available > 0)  # noqa: E712
 
     if q:
@@ -117,6 +119,28 @@ def browse_marketplace(
         items_with_dist.sort(key=lambda x: x[0])
 
     return [item[1] for item in items_with_dist]
+
+
+@router.get("/live-mandi-prices")
+def get_live_mandi_prices(
+    state: str = Query("Tamil Nadu", description="State filter"),
+    district: Optional[str] = Query(None, description="District filter"),
+    commodity: Optional[str] = Query(None, description="Commodity filter"),
+    limit: int = Query(100, ge=1, le=500),
+    refresh: bool = Query(False, description="Force fresh fetch from data.gov.in"),
+):
+    """
+    Returns authentic Government of India (data.gov.in) daily market prices
+    from Mandis across Tamil Nadu and India.
+    """
+    from app.services.mandi_price_service import fetch_live_mandi_prices
+    return fetch_live_mandi_prices(
+        state=state,
+        district=district,
+        commodity=commodity,
+        limit=limit,
+        force_refresh=refresh,
+    )
 
 
 @router.get("/{listing_id}", response_model=ListingOut)

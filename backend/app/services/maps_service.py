@@ -86,6 +86,7 @@ def get_road_distance_and_duration(
     lon1: float | None,
     lat2: float | None,
     lon2: float | None,
+    strict: bool = False,
 ) -> Tuple[float, int]:
     """
     Returns (distance_km, duration_minutes) using:
@@ -93,8 +94,20 @@ def get_road_distance_and_duration(
     2. Google Maps Distance Matrix API (if GOOGLE_MAPS_API_KEY configured)
     3. OSRM driving network (free OpenStreetMap road network)
     4. Offline Haversine * 1.25x road winding factor
+
+    If strict=True, raises ValueError if coordinates are missing/invalid.
     """
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        if strict:
+            raise ValueError("Coordinates (latitude and longitude) are required for road distance calculation")
+        return 15.0, 30
+
+    try:
+        f_lat1, f_lon1 = float(lat1), float(lon1)
+        f_lat2, f_lon2 = float(lat2), float(lon2)
+    except (TypeError, ValueError):
+        if strict:
+            raise ValueError("Coordinates must be valid numeric latitude and longitude values")
         return 15.0, 30
 
     # Identical coordinates
@@ -206,4 +219,38 @@ def optimize_multi_pickup_delivery_order(
                 best_sequence = current_route
 
     return best_sequence or (pickup_stops + delivery_stops), round(min_total_km, 2)
+
+
+def get_route_toll_charges(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> float:
+    """
+    Returns actual toll charges (in INR) reported by directions routing API.
+    Never fabricates or invents tolls. Defaults to 0.0 if not reported.
+    """
+    google_key = getattr(settings, "GOOGLE_MAPS_API_KEY", None)
+    if not google_key:
+        return 0.0
+
+    try:
+        url = "https://maps.googleapis.com/maps/api/directions/json"
+        params = {
+            "origin": f"{lat1},{lon1}",
+            "destination": f"{lat2},{lon2}",
+            "key": google_key,
+            "mode": "driving",
+        }
+        with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            resp = client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "OK" and data.get("routes"):
+                    fare = data["routes"][0].get("fare")
+                    if fare and "value" in fare:
+                        return round(float(fare["value"]), 2)
+    except Exception as e:
+        logger.debug(f"Toll check: {e}")
+
+    return 0.0
+
 

@@ -70,6 +70,13 @@ class LoginRequest(BaseModel):
     role: RoleEnum
 
 
+class GoogleAuthRequest(BaseModel):
+    credential: Optional[str] = None
+    role: Optional[RoleEnum] = RoleEnum.buyer
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -200,6 +207,7 @@ class OrderOut(BaseModel):
     total_amount: Decimal
     delivery_location: Optional[str]
     status: OrderStatusEnum
+    delivery_otp: Optional[str] = None
     payment_method: Optional[PaymentMethodEnum] = None
     payment_status: Optional[PaymentStatusEnum] = None
     paid_at: Optional[datetime] = None
@@ -214,11 +222,25 @@ class OrderOut(BaseModel):
     upi_id: Optional[str] = None
     upi_name: Optional[str] = None
     transport_request_id: Optional[int] = None
+    base_fare: Optional[Decimal] = None
+    distance_fare: Optional[Decimal] = None
+    toll_charges: Optional[Decimal] = None
+    loading_unloading_charge: Optional[Decimal] = None
+    waiting_charge: Optional[Decimal] = None
+    road_distance_km: Optional[Decimal] = None
+    allocated_vehicle_type: Optional[str] = None
+    can_cancel: Optional[bool] = False
+    cancellation_deadline: Optional[datetime] = None
+    seconds_remaining_to_cancel: Optional[int] = 0
     created_at: datetime
     items: List[OrderItemOut]
 
     class Config:
         from_attributes = True
+
+
+class OrderCancelIn(BaseModel):
+    reason: Optional[str] = "Cancelled by buyer within 1 hour"
 
 
 class PaymentVerifyIn(BaseModel):
@@ -309,6 +331,50 @@ class BulkRequirementOut(BaseModel):
     status: str
     matches: List[MatchOut]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdvanceDemandCreate(BaseModel):
+    product_name: str
+    required_quantity: Decimal = Field(gt=0)
+    unit: str = "kg"
+    needed_by: date
+    delivery_location: str
+    quality_grade: Optional[str] = None
+    target_price_per_kg: Optional[Decimal] = None
+    delivery_latitude: Optional[float] = None
+    delivery_longitude: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class AdvanceDemandMatchOut(BaseModel):
+    id: int
+    listing_id: int
+    farmer_name: Optional[str] = None
+    matched_quantity: Decimal
+    farmer_price: Optional[Decimal] = None
+    matched_at: Optional[datetime] = None
+
+
+class AdvanceDemandOut(BaseModel):
+    id: int
+    buyer_id: int
+    buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    product_id: int
+    product_name: str
+    required_quantity: Decimal
+    matched_quantity: Decimal = Decimal("0")
+    remaining_quantity: Decimal = Decimal("0")
+    unit: str = "kg"
+    needed_by: Optional[date] = None
+    delivery_location: Optional[str] = None
+    quality_grade: Optional[str] = None
+    status: str  # OPEN, PARTIALLY_MATCHED, MATCHED, CLOSED
+    created_at: datetime
+    matches: List[AdvanceDemandMatchOut] = []
 
     class Config:
         from_attributes = True
@@ -631,6 +697,73 @@ class VoiceInteractOut(BaseModel):
 
 class RouteExplainIn(BaseModel):
     route_plan: Dict[str, Any]
+
+
+# ---------- Database-Driven Vehicle Rates & Logistics Settings ----------
+class VehicleRateRead(BaseModel):
+    id: int
+    vehicle_type: str
+    base_fare: Decimal
+    rate_per_km: Decimal
+    minimum_fare: Decimal
+    loading_unloading_charge: Decimal
+    waiting_charge_per_hour: Decimal
+    active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class VehicleRateUpdate(BaseModel):
+    base_fare: Optional[Decimal] = None
+    rate_per_km: Optional[Decimal] = None
+    minimum_fare: Optional[Decimal] = None
+    loading_unloading_charge: Optional[Decimal] = None
+    waiting_charge_per_hour: Optional[Decimal] = None
+    active: Optional[bool] = None
+
+
+class LogisticsSettingRead(BaseModel):
+    id: int
+    setting_key: str
+    setting_value: str
+    description: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LogisticsSettingUpdate(BaseModel):
+    setting_value: str
+    description: Optional[str] = None
+
+
+class TransportFeeQuoteRequest(BaseModel):
+    delivery_latitude: Decimal
+    delivery_longitude: Decimal
+    items: List[CartItemIn]
+    delivery_location: Optional[str] = None
+
+
+class TransportFeeBreakdownOut(BaseModel):
+    vehicle_type: str
+    road_distance_km: float
+    base_fare: float
+    rate_per_km: float
+    distance_fare: float
+    toll_charges: float
+    loading_unloading_charge: float
+    waiting_charge: float
+    subtotal: float
+    minimum_fare: float
+    is_minimum_fare_applied: bool
+    total_fee: float
+    estimated_duration_minutes: Optional[int] = None
+    cargo_weight_kg: Optional[float] = None
+
 
 
 

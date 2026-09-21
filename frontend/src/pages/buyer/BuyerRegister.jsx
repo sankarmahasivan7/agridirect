@@ -16,7 +16,9 @@ import {
   Store
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 import LocationPicker from '../../components/LocationPicker.jsx'
+import GoogleSignInButton from '../../components/GoogleSignInButton.jsx'
 
 const BUYER_TYPES = [
   { value: 'consumer', label: 'Individual Consumer' },
@@ -29,6 +31,7 @@ const BUYER_TYPES = [
 
 export default function BuyerRegister() {
   const { registerBuyer } = useAuth()
+  const { t, isTamil } = useLanguage()
   const navigate = useNavigate()
   const [form, setForm] = useState({
     full_name: '', 
@@ -68,13 +71,13 @@ export default function BuyerRegister() {
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-100 text-sky-800 text-xs font-bold mb-3">
           <Store className="w-4 h-4 text-sky-600" />
-          Wholesale & Consumer Sourcing
+          {t('auth.wholesalePill', 'Wholesale & Consumer Sourcing')}
         </div>
         <h1 className="text-3xl font-bold font-display text-gray-900">
-          Create Your Buyer Account
+          {t('auth.buyerRegisterTitle', 'Create Your Buyer Account')}
         </h1>
         <p className="text-gray-500 text-sm mt-1.5 max-w-md mx-auto">
-          Source farm-fresh vegetables, fruits, and grains directly with full logistics tracking and no broker markups.
+          {t('auth.buyerRegisterSubtitle', 'Source farm-fresh vegetables, fruits, and grains directly with full logistics tracking and no broker markups.')}
         </p>
       </div>
 
@@ -90,17 +93,17 @@ export default function BuyerRegister() {
           {/* Section 1: Buyer Profile */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-leaf-700 mb-3 flex items-center gap-1.5">
-              <User className="w-4 h-4" /> 1. Buyer Profile & Type
+              <User className="w-4 h-4" /> {t('auth.buyerProfileHeading', '1. Buyer Profile & Type')}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
-                <label className="label">Contact / Full Name *</label>
+                <label className="label">{t('auth.fullNameLabel', 'Contact / Full Name *')}</label>
                 <div className="relative">
                   <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     className="input !pl-10"
                     required
-                    placeholder="e.g. Priya Sundaram"
+                    placeholder={t('auth.fullNamePlaceholder', 'e.g. Sankar Mahasivan')}
                     value={form.full_name}
                     onChange={set('full_name')}
                   />
@@ -108,7 +111,7 @@ export default function BuyerRegister() {
               </div>
 
               <div>
-                <label className="label">Procurement Role / Type *</label>
+                <label className="label">{t('auth.buyerTypeLabel', 'Procurement Role / Type *')}</label>
                 <select className="input" value={form.buyer_type} onChange={set('buyer_type')}>
                   {BUYER_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
@@ -117,12 +120,12 @@ export default function BuyerRegister() {
               </div>
 
               <div>
-                <label className="label">Business / Firm Name (Optional)</label>
+                <label className="label">{t('auth.businessNameLabel', 'Business / Firm Name (Optional)')}</label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     className="input !pl-10"
-                    placeholder="e.g. Annapurna Fresh Kitchen"
+                    placeholder={t('auth.businessNamePlaceholder', 'e.g. Annapurna Fresh Kitchen')}
                     value={form.business_name}
                     onChange={set('business_name')}
                   />
@@ -138,7 +141,7 @@ export default function BuyerRegister() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">Email Address *</label>
+                <label className="label">{t('auth.emailLabel', 'Email Address *')}</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
@@ -153,7 +156,7 @@ export default function BuyerRegister() {
               </div>
 
               <div>
-                <label className="label">Mobile Number *</label>
+                <label className="label">{t('auth.phoneLabel', 'Mobile Number *')}</label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
@@ -167,7 +170,7 @@ export default function BuyerRegister() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="label">Password (min 8 chars) *</label>
+                <label className="label">{t('auth.passwordLabel', 'Password (min 8 chars) *')}</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
@@ -190,7 +193,7 @@ export default function BuyerRegister() {
               </div>
 
               <div>
-                <label className="label">Operating District *</label>
+                <label className="label">{t('auth.districtLabel', 'Operating District *')}</label>
                 <select
                   className="input font-medium bg-white"
                   required
@@ -202,18 +205,18 @@ export default function BuyerRegister() {
                   <option value="Thoothukudi">Thoothukudi (தூத்துக்குடி)</option>
                 </select>
                 <p className="text-[11px] text-sky-700 mt-1 font-medium">
-                  ✓ Serviced by district central warehouse
+                  ✓ {t('auth.warehouseServiceNote', 'Serviced by district central warehouse')}
                 </p>
               </div>
 
               <div>
-                <label className="label">Default Delivery Street Address *</label>
+                <label className="label">{t('auth.streetAddressLabel', 'Default Delivery Street Address *')}</label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     className="input !pl-10"
                     required
-                    placeholder="e.g. 14 Market Road, Tenkasi"
+                    placeholder={t('auth.streetAddressPlaceholder', 'e.g. 14 Market Road, Tenkasi')}
                     value={form.location}
                     onChange={set('location')}
                   />
@@ -226,10 +229,10 @@ export default function BuyerRegister() {
           <div className="pt-4 border-t border-gray-100">
             <div className="mb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-leaf-700 flex items-center gap-1.5">
-                <Compass className="w-4 h-4" /> 3. Default Delivery Coordinates
+                <Compass className="w-4 h-4" /> {t('auth.deliveryHeading', '3. Default Delivery Coordinates')}
               </h3>
               <p className="text-xs text-gray-400 mt-1">
-                Saved delivery point used to automatically calculate transport distances and match nearest vehicles.
+                {t('auth.deliveryPointNote', 'Saved delivery point used to automatically calculate transport distances and match nearest vehicles.')}
               </p>
             </div>
 
@@ -237,7 +240,7 @@ export default function BuyerRegister() {
               latitude={form.default_latitude}
               longitude={form.default_longitude}
               onChange={(lat, lng) => setForm({ ...form, default_latitude: lat, default_longitude: lng })}
-              label="Default Delivery Point"
+              label={t('auth.deliveryHeading', 'Default Delivery Point')}
             />
           </div>
 
@@ -249,21 +252,31 @@ export default function BuyerRegister() {
             {loading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Creating Buyer Account...
+                {t('common.loading', 'Creating Buyer Account...')}
               </>
             ) : (
               <>
-                <span>Create Buyer Account & Start Sourcing</span>
+                <span>{t('auth.createBuyerBtn', 'Create Buyer Account & Start Sourcing')}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
 
+        <div className="mt-5">
+          <div className="relative flex items-center justify-center my-4">
+            <div className="border-t border-slate-200 w-full"></div>
+            <span className="bg-white px-3 text-xs text-slate-400 font-medium uppercase tracking-wider absolute">
+              {t('auth.orRegisterWith', 'or register with')}
+            </span>
+          </div>
+          <GoogleSignInButton role="buyer" label={t('auth.continueWithGoogle', 'Continue with Google')} />
+        </div>
+
         <p className="text-sm text-gray-500 mt-6 text-center">
-          Already registered?{' '}
+          {t('auth.alreadyHaveAccount', 'Already registered?')}{' '}
           <Link to="/buyer/login" className="text-leaf-700 font-bold hover:underline">
-            Log in to Buyer Hub
+            {t('auth.loginToBuyerHub', 'Log in to Buyer Hub')}
           </Link>
         </p>
       </div>

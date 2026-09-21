@@ -22,6 +22,7 @@ import ProductDetail from './pages/buyer/ProductDetail.jsx'
 import Cart from './pages/buyer/Cart.jsx'
 import BuyerOrders from './pages/buyer/BuyerOrders.jsx'
 import BulkOrder from './pages/buyer/BulkOrder.jsx'
+import AdvanceDemands from './pages/buyer/AdvanceDemands.jsx'
 
 import TransporterRegister from './pages/transporter/TransporterRegister.jsx'
 import TransporterDashboard from './pages/transporter/TransporterDashboard.jsx'
@@ -32,53 +33,69 @@ import TrackShipment from './pages/transport/TrackShipment.jsx'
 
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import MarketPrices from './pages/market/MarketPrices.jsx'
+import { useLanguage } from './context/LanguageContext.jsx'
+import { useLocation } from 'react-router-dom'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
+}
 
 export default function App() {
+  const { language } = useLanguage()
+
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <ScrollToTop />
       <Navbar />
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/market-prices" element={<MarketPrices />} />
+      <div key={language} className="min-h-[calc(100vh-4rem)] flex flex-col pb-20 md:pb-0">
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/market-prices" element={<MarketPrices />} />
 
-        {/* Role-specific login pages */}
-        <Route path="/farmer/login" element={<RoleLogin role="farmer" />} />
-        <Route path="/buyer/login" element={<RoleLogin role="buyer" />} />
-        <Route path="/transporter/login" element={<RoleLogin role="transporter" />} />
-        <Route path="/admin/login" element={<RoleLogin role="admin" />} />
+          {/* Role-specific login pages */}
+          <Route path="/farmer/login" element={<RoleLogin role="farmer" />} />
+          <Route path="/buyer/login" element={<RoleLogin role="buyer" />} />
+          <Route path="/transporter/login" element={<RoleLogin role="transporter" />} />
+          <Route path="/admin/login" element={<RoleLogin role="admin" />} />
 
-        {/* Registration */}
-        <Route path="/farmer/register" element={<FarmerRegister />} />
-        <Route path="/buyer/register" element={<BuyerRegister />} />
-        <Route path="/transporter/register" element={<TransporterRegister />} />
+          {/* Registration */}
+          <Route path="/farmer/register" element={<FarmerRegister />} />
+          <Route path="/buyer/register" element={<BuyerRegister />} />
+          <Route path="/transporter/register" element={<TransporterRegister />} />
 
-        {/* Farmer listing management screens */}
-        <Route path="/farmer/dashboard" element={<ProtectedRoute allowedRole="farmer"><FarmerDashboard /></ProtectedRoute>} />
-        <Route path="/farmer/listings" element={<ProtectedRoute allowedRole="farmer"><FarmerListings /></ProtectedRoute>} />
-        <Route path="/farmer/listings/new" element={<ProtectedRoute allowedRole="farmer"><NewListing /></ProtectedRoute>} />
-        <Route path="/farmer/listings/edit/:id" element={<ProtectedRoute allowedRole="farmer"><NewListing /></ProtectedRoute>} />
-        <Route path="/farmer/orders" element={<ProtectedRoute allowedRole="farmer"><FarmerOrders /></ProtectedRoute>} />
-        <Route path="/farmer/ai-insights" element={<ProtectedRoute allowedRole="farmer"><AIInsights /></ProtectedRoute>} />
+          {/* Farmer listing management screens */}
+          <Route path="/farmer/dashboard" element={<ProtectedRoute allowedRole="farmer"><FarmerDashboard /></ProtectedRoute>} />
+          <Route path="/farmer/listings" element={<ProtectedRoute allowedRole="farmer"><FarmerListings /></ProtectedRoute>} />
+          <Route path="/farmer/listings/new" element={<ProtectedRoute allowedRole="farmer"><NewListing /></ProtectedRoute>} />
+          <Route path="/farmer/listings/edit/:id" element={<ProtectedRoute allowedRole="farmer"><NewListing /></ProtectedRoute>} />
+          <Route path="/farmer/orders" element={<ProtectedRoute allowedRole="farmer"><FarmerOrders /></ProtectedRoute>} />
+          <Route path="/farmer/ai-insights" element={<ProtectedRoute allowedRole="farmer"><AIInsights /></ProtectedRoute>} />
 
-        {/* Buyer */}
-        <Route path="/buyer/dashboard" element={<ProtectedRoute allowedRole="buyer"><BuyerDashboard /></ProtectedRoute>} />
-        <Route path="/buyer/marketplace" element={<ProtectedRoute allowedRole="buyer"><Marketplace /></ProtectedRoute>} />
-        <Route path="/buyer/product/:id" element={<ProtectedRoute allowedRole="buyer"><ProductDetail /></ProtectedRoute>} />
-        <Route path="/buyer/cart" element={<ProtectedRoute allowedRole="buyer"><Cart /></ProtectedRoute>} />
-        <Route path="/buyer/orders" element={<ProtectedRoute allowedRole="buyer"><BuyerOrders /></ProtectedRoute>} />
-        <Route path="/buyer/bulk-order" element={<ProtectedRoute allowedRole="buyer"><BulkOrder /></ProtectedRoute>} />
+          {/* Buyer */}
+          <Route path="/buyer/dashboard" element={<ProtectedRoute allowedRole="buyer"><BuyerDashboard /></ProtectedRoute>} />
+          <Route path="/buyer/marketplace" element={<ProtectedRoute allowedRole="buyer"><Marketplace /></ProtectedRoute>} />
+          <Route path="/buyer/product/:id" element={<ProtectedRoute allowedRole="buyer"><ProductDetail /></ProtectedRoute>} />
+          <Route path="/buyer/cart" element={<ProtectedRoute allowedRole="buyer"><Cart /></ProtectedRoute>} />
+          <Route path="/buyer/orders" element={<ProtectedRoute allowedRole="buyer"><BuyerOrders /></ProtectedRoute>} />
+          <Route path="/buyer/bulk-order" element={<ProtectedRoute allowedRole="buyer"><BulkOrder /></ProtectedRoute>} />
+          <Route path="/buyer/advance-demands" element={<ProtectedRoute allowedRole="buyer"><AdvanceDemands /></ProtectedRoute>} />
 
-        {/* Transporter */}
-        <Route path="/transporter/dashboard" element={<ProtectedRoute allowedRole="transporter"><TransporterDashboard /></ProtectedRoute>} />
+          {/* Transporter */}
+          <Route path="/transporter/dashboard" element={<ProtectedRoute allowedRole="transporter"><TransporterDashboard /></ProtectedRoute>} />
 
-        {/* Transport requests */}
-        <Route path="/transport/request" element={<ProtectedRoute allowedRole={["farmer", "admin"]}><RequestTransport /></ProtectedRoute>} />
-        <Route path="/transport/my-requests" element={<ProtectedRoute allowedRole={["farmer", "buyer"]}><MyShipments /></ProtectedRoute>} />
-        <Route path="/transport/track/:id" element={<ProtectedRoute allowedRole={["farmer", "buyer", "transporter", "admin"]}><TrackShipment /></ProtectedRoute>} />
+          {/* Transport requests */}
+          <Route path="/transport/request" element={<ProtectedRoute allowedRole={["farmer", "admin"]}><RequestTransport /></ProtectedRoute>} />
+          <Route path="/transport/my-requests" element={<ProtectedRoute allowedRole={["farmer", "buyer"]}><MyShipments /></ProtectedRoute>} />
+          <Route path="/transport/track/:id" element={<ProtectedRoute allowedRole={["farmer", "buyer", "transporter", "admin"]}><TrackShipment /></ProtectedRoute>} />
 
-        {/* Admin */}
-        <Route path="/admin/dashboard" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
-      </Routes>
+          {/* Admin */}
+          <Route path="/admin/dashboard" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
+        </Routes>
+      </div>
       <VoiceAssistant />
     </BrowserRouter>
   )

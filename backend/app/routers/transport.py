@@ -1,6 +1,7 @@
 from datetime import datetime, date, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -79,30 +80,50 @@ def _serialize(req: TransportRequest) -> TransportRequestOut:
 def create_transport_request(
     payload: TransportRequestCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role(RoleEnum.fpo, RoleEnum.admin)),
+    user: User = Depends(require_role(RoleEnum.farmer, RoleEnum.fpo, RoleEnum.admin)),
 ):
     """
-    Manual transport booking, reserved for FPO/admin bulk logistics (e.g.
-    moving aggregated supply that isn't tied to a specific buyer order).
-    Ordinary buyer purchases no longer need this -- transport is created and
-    assigned automatically the moment an order is placed (see
-    app/services/transport_service.py), based on the real farmer and buyer
-    locations, never manually requested by the farmer or buyer.
+    Transport booking endpoint:
+    1. Farmers can apply for farm-to-warehouse pickup transport if they lack transport facilities.
+    2. FPO/admin bulk logistics for moving aggregated supply.
     """
     if payload.order_id is not None:
         order = db.query(Order).filter(Order.id == payload.order_id).first()
         if not order:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
+    pickup_lat = payload.pickup_latitude
+    pickup_lon = payload.pickup_longitude
+    if (pickup_lat is None or pickup_lon is None) and user.role == RoleEnum.farmer and user.farmer_profile:
+        pickup_lat = user.farmer_profile.latitude
+        pickup_lon = user.farmer_profile.longitude
+
+    dest_lat = payload.destination_latitude
+    dest_lon = payload.destination_longitude
+    if dest_lat is None or dest_lon is None:
+        # Check if destination specifies one of the 3 district warehouses
+        dest_str = (payload.destination_location or "").lower()
+        from app.core.constants import DISTRICT_WAREHOUSES
+        for d_key, wh in DISTRICT_WAREHOUSES.items():
+            if d_key.lower() in dest_str or wh["warehouse_name"].lower() in dest_str or wh["code"].lower() in dest_str:
+                dest_lat = wh["latitude"]
+                dest_lon = wh["longitude"]
+                break
+        if dest_lat is None and user.farmer_profile and user.farmer_profile.district:
+            wh = DISTRICT_WAREHOUSES.get(user.farmer_profile.district)
+            if wh:
+                dest_lat = wh["latitude"]
+                dest_lon = wh["longitude"]
+
     req = TransportRequest(
         requested_by_user_id=user.id,
         order_id=payload.order_id,
         pickup_location=payload.pickup_location,
-        pickup_latitude=payload.pickup_latitude,
-        pickup_longitude=payload.pickup_longitude,
+        pickup_latitude=pickup_lat,
+        pickup_longitude=pickup_lon,
         destination_location=payload.destination_location,
-        destination_latitude=payload.destination_latitude,
-        destination_longitude=payload.destination_longitude,
+        destination_latitude=dest_lat,
+        destination_longitude=dest_lon,
         required_by=payload.required_by,
         weight_kg=payload.weight_kg,
         notes=payload.notes,
@@ -111,10 +132,11 @@ def create_transport_request(
     db.add(req)
     db.flush()
 
-    vehicle = find_feasible_vehicle(db, payload.weight_kg, payload.pickup_latitude, payload.pickup_longitude)
+    vehicle = find_feasible_vehicle(db, payload.weight_kg, pickup_lat, pickup_lon)
     if vehicle:
         req.assigned_vehicle_id = vehicle.id
         req.vehicle_capacity_kg = vehicle.capacity_kg
+        req.status = TransportRequestStatusEnum.ASSIGNED
 
     db.commit()
     db.refresh(req)
@@ -329,6 +351,7 @@ def _execute_status_transition(
     new_status: TransportRequestStatusEnum,
     profile: TransporterProfile,
     db: Session,
+    otp: Optional[str] = None,
 ) -> TransportRequest:
     # If unassigned or pending acceptance, verify vehicle eligibility before assigning
     if req.assigned_vehicle_id is None and profile and profile.vehicle:
@@ -377,6 +400,17 @@ def _execute_status_transition(
                 f"{earliest_delivery.strftime('%Y-%m-%d %H:%M UTC')}.",
             )
 
+        # Delivery Verification OTP check
+        if req.order_id and otp:
+            linked_order = db.query(Order).filter(Order.id == req.order_id).first()
+            if linked_order and linked_order.delivery_otp:
+                clean_otp = otp.strip()
+                if clean_otp != linked_order.delivery_otp.strip():
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid Delivery OTP. Please collect and enter the buyer's 6-digit OTP to confirm delivery.",
+                    )
+
     req.status = new_status
 
     # When delivery is completed, update the linked Order so farmer earnings are unlocked
@@ -399,6 +433,7 @@ def _execute_status_transition(
 def update_job_status(
     request_id: int,
     new_status: TransportRequestStatusEnum,
+    otp: Optional[str] = Query(None, description="6-digit Buyer Delivery Verification OTP"),
     db: Session = Depends(get_db),
     user: User = Depends(require_role(RoleEnum.transporter)),
 ):
@@ -406,7 +441,7 @@ def update_job_status(
     req = db.query(TransportRequest).options(joinedload(TransportRequest.assigned_vehicle)).filter(TransportRequest.id == request_id).first()
     if not req:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Transport job not found")
-    req = _execute_status_transition(req, new_status, user.transporter_profile, db)
+    req = _execute_status_transition(req, new_status, user.transporter_profile, db, otp=otp)
     return _serialize(req)
 
 
@@ -414,6 +449,7 @@ def update_job_status(
 def update_transport_status(
     request_id: int,
     new_status: TransportRequestStatusEnum,
+    otp: Optional[str] = Query(None, description="6-digit Buyer Delivery Verification OTP"),
     db: Session = Depends(get_db),
     user: User = Depends(require_role(RoleEnum.transporter)),
 ):
@@ -421,7 +457,7 @@ def update_transport_status(
     req = db.query(TransportRequest).options(joinedload(TransportRequest.assigned_vehicle)).filter(TransportRequest.id == request_id).first()
     if not req:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Transport request not found")
-    req = _execute_status_transition(req, new_status, user.transporter_profile, db)
+    req = _execute_status_transition(req, new_status, user.transporter_profile, db, otp=otp)
     return _serialize(req)
 
 

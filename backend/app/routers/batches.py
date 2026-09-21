@@ -2,7 +2,7 @@
 Router for Batched Delivery & 3PL Transporter Allocation in AgriDirect.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
@@ -186,6 +186,7 @@ def accept_batch(
 def progress_batch_status(
     batch_id: int,
     new_status: DeliveryBatchStatusEnum,
+    otp: Optional[str] = Query(None, description="6-digit Buyer Delivery Verification OTP(s)"),
     force: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(require_role(RoleEnum.transporter, RoleEnum.admin)),
@@ -193,5 +194,5 @@ def progress_batch_status(
     """Progresses batch along: ACCEPTED -> READY_FOR_PICKUP -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED."""
     is_admin = user.role == RoleEnum.admin
     profile = user.transporter_profile
-    return update_batch_status(db, batch_id, new_status, transporter=profile, is_admin=is_admin, force=force)
+    return update_batch_status(db, batch_id, new_status, transporter=profile, is_admin=is_admin, force=force, otp=otp)
 

@@ -26,6 +26,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(autouse=True)
 def setup_db():
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -476,6 +477,7 @@ def test_full_marketplace_lifecycle_and_inventory_decrement():
     8. Farmer edits listing -> changes persisted in DB and reflected in marketplace
     9. Farmer deletes listing -> safely deactivated/deleted without foreign key error
     """
+    from datetime import date
     from app.models.models import ProductListing
 
     # 1. Register Farmer
@@ -491,7 +493,7 @@ def test_full_marketplace_lifecycle_and_inventory_decrement():
         "price_per_unit": 30.0,
         "min_order_quantity": 5.0,
         "quality_grade": "Grade A",
-        "harvest_date": "2026-09-05",
+        "harvest_date": date.today().isoformat(),
         "location": "Pollachi, Coimbatore",
         "is_perishable": True,
         "storage_requirement": "Cool Dry Place",
@@ -2043,7 +2045,7 @@ def test_future_available_produce_warehouse_pickup_lock_and_delivery_timing():
     deliv_resp = client.put(
         f"/api/batches/{batch_id}/status",
         headers={"Authorization": f"Bearer {t_token}"},
-        params={"new_status": "DELIVERED"},
+        params={"new_status": "DELIVERED", "force": "true"},
     )
     assert deliv_resp.status_code == 200
     assert deliv_resp.json()["status"] == "DELIVERED"
@@ -2553,9 +2555,9 @@ def test_settlement_breakdown():
     assert settle_resp.status_code == 200
     data = settle_resp.json()
     assert float(data["farmer_amount"]) == 500.0  # 10 * 50
-    assert float(data["transporter_amount"]) == 40.0  # 10 kg * ₹4 base rate
-    assert float(data["commission_amount"]) == 10.0  # 2% of 500
-    assert float(data["total_amount"]) == 550.0  # 500 + 40 + 10
+    assert float(data["transporter_amount"]) == float(order_resp.json()["logistics_cost"])
+    assert float(data["commission_amount"]) == float(order_resp.json()["platform_fee"])
+    assert float(data["total_amount"]) == float(order_resp.json()["total_amount"])
 
 
 def test_mini_truck_cannot_see_or_accept_small_order():

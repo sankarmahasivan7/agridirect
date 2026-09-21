@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useCart } from '../../context/CartContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { createOrder, verifyPayment, failPayment, confirmQrPayment } from '../../services/api.js'
+import { createOrder, verifyPayment, failPayment, confirmQrPayment, quoteTransportFee } from '../../services/api.js'
 import LocationPicker from '../../components/LocationPicker.jsx'
 import { useToast } from '../../components/Toast.jsx'
 import { useLanguage } from '../../context/LanguageContext.jsx'
@@ -79,8 +79,43 @@ export default function Cart() {
   const [confirmingQr, setConfirmingQr] = useState(false)
   const [copiedVpa, setCopiedVpa] = useState(false)
 
-  // Estimated only for UI preview; authoritative billing computed in backend
-  const estLogistics = subtotal > 0 ? items.reduce((s, i) => s + Number(i.quantity), 0) * 4 : 0
+  // Map-based transport fee quote state
+  const [feeQuote, setFeeQuote] = useState(null)
+  const [feeLoading, setFeeLoading] = useState(false)
+
+  useEffect(() => {
+    if (!items.length || deliveryLat == null || deliveryLng == null) {
+      setFeeQuote(null)
+      return
+    }
+
+    let isMounted = true
+    setFeeLoading(true)
+
+    quoteTransportFee({
+      delivery_latitude: deliveryLat,
+      delivery_longitude: deliveryLng,
+      items: items.map((i) => ({ listing_id: i.listing_id, quantity: Number(i.quantity) })),
+      delivery_location: deliveryLocation || `${selectedDistrict} Central Destination`,
+    })
+      .then((res) => {
+        if (isMounted) {
+          setFeeQuote(res.data)
+          setFeeLoading(false)
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setFeeLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [items, deliveryLat, deliveryLng, deliveryLocation, selectedDistrict])
+
+  const estLogistics = feeQuote ? Number(feeQuote.total_fee) : (subtotal > 0 ? items.reduce((s, i) => s + Number(i.quantity), 0) * 4 : 0)
   const estPlatformFee = subtotal * 0.02
   const estTotal = subtotal + estLogistics + estPlatformFee
 
@@ -525,10 +560,42 @@ export default function Cart() {
                 <span>Items Subtotal (Farmer Payout):</span>
                 <span className="font-bold text-slate-800">₹{subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Logistics & Transport:</span>
-                <span className="font-bold text-slate-800">₹{estLogistics.toFixed(2)}</span>
+
+              <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                <div className="flex justify-between items-center text-slate-700">
+                  <span className="font-semibold flex items-center gap-1">
+                    <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Logistics & Transport:</span>
+                  </span>
+                  <span className="font-black text-slate-900">
+                    {feeLoading ? 'Calculating...' : `₹${estLogistics.toFixed(2)}`}
+                  </span>
+                </div>
+
+                {feeQuote && (
+                  <div className="pt-1.5 border-t border-slate-100 text-[11px] space-y-1 text-slate-500">
+                    <div className="flex justify-between">
+                      <span>Assigned Fleet:</span>
+                      <span className="font-bold text-slate-700">
+                        {feeQuote.vehicle_type === 'BIKE' ? '🛵 Express Bike (≤50kg direct)' : '🚛 Central Cargo Truck'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Actual Road Distance:</span>
+                      <span className="font-bold text-slate-700">
+                        {feeQuote.road_distance_km.toFixed(1)} km (Route API)
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>Base ₹{feeQuote.base_fare.toFixed(0)} + ₹{feeQuote.rate_per_km.toFixed(0)}/km</span>
+                      {feeQuote.is_minimum_fare_applied && (
+                        <span className="text-amber-600 font-semibold">(Min fare applied)</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div className="flex justify-between text-slate-600">
                 <span>Platform Service Fee (2%):</span>
                 <span className="font-bold text-slate-800">₹{estPlatformFee.toFixed(2)}</span>

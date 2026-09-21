@@ -16,6 +16,7 @@ import {
   AlertCircle, 
   ArrowLeft
 } from 'lucide-react'
+import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
 
 const ROLE_META = {
   farmer: { 
@@ -126,19 +127,22 @@ export default function RoleLogin({ role }) {
   }
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 mesh-gradient relative">
+      {/* Ambient decorative glow */}
+      <div className="absolute w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
+
       <div className="max-w-md w-full">
         
         {/* Back Link */}
         <Link 
           to="/" 
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 mb-6 transition"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-700 mb-6 transition"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> {language === 'ta' ? 'பிரிவு தேர்வுக்கு திரும்புக' : 'Back to Role Selection'}
         </Link>
 
         {/* Card */}
-        <div className="card p-8 border border-slate-200/80 shadow-soft-lg">
+        <div className="glass-card p-8 border border-slate-200/90 shadow-soft-2xl">
           
           {/* Header */}
           <div className="flex items-center gap-3.5 mb-6">
@@ -217,6 +221,19 @@ export default function RoleLogin({ role }) {
               )}
             </button>
           </form>
+
+          {/* Social Login Divider */}
+          {role !== 'admin' && (
+            <div className="mt-5">
+              <div className="relative flex items-center justify-center my-4">
+                <div className="border-t border-slate-200 w-full"></div>
+                <span className="bg-white px-3 text-xs text-slate-400 font-medium uppercase tracking-wider absolute">
+                  {language === 'ta' ? 'அல்லது' : 'or continue with'}
+                </span>
+              </div>
+              <GoogleSignInButton role={role} label={`Continue with Google`} />
+            </div>
+          )}
 
           {/* Footer Registration Link */}
           {role !== 'admin' && (

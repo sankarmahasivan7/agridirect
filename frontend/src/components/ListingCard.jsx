@@ -52,12 +52,12 @@ export default function ListingCard({ listing }) {
 
   const seller = listing.farmer_name || (language === 'ta' ? 'சரிபார்க்கப்பட்ட உழவர்' : 'Verified Farmer')
 
-  // Real or derived rating
-  const hasRealReviews = Boolean((listing.farmer_review_count && listing.farmer_review_count > 0) || (listing.product_review_count && listing.product_review_count > 0))
-  const rating = listing.farmer_rating || listing.product_rating || (listing.quality_grade === 'Grade A' ? 4.8 : listing.quality_grade === 'Grade B' ? 4.3 : 4.1)
-  const reviewCount = hasRealReviews
-    ? ((listing.farmer_review_count || 0) + (listing.product_review_count || 0))
-    : Math.max(12, Math.floor((listing.id * 7) % 85) + 14)
+  // Real farmer rating and feedback count (initial 5.0 baseline, exact review count)
+  const realReviewCount = (listing.farmer_review_count || 0) + (listing.product_review_count || 0)
+  const rating = realReviewCount > 0 
+    ? (listing.farmer_rating || listing.product_rating || 5.0) 
+    : (listing.farmer_rating || 5.0)
+  const reviewCount = realReviewCount
 
   const handleAddToCart = (e) => {
     e.preventDefault()
@@ -82,21 +82,21 @@ export default function ListingCard({ listing }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 hover:border-amber-400/80 shadow-xs hover:shadow-soft-xl transition-all duration-200 flex flex-col justify-between overflow-hidden group">
+    <div className="glass-card flex flex-col justify-between overflow-hidden group hover:shadow-soft-xl hover:border-emerald-300 transition-all duration-200">
       
       {/* Top Media / Badge Banner */}
       <div className="p-4 bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 relative">
         <div className="flex items-center justify-between gap-2 mb-2">
-          {/* Amazon-style Fulfilled Badge or Pre-order Badge */}
+          {/* Direct Farm Trade Badge or Pre-order Badge */}
           {isFutureAvailable ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-600 text-white shadow-2xs">
               <Calendar className="w-3 h-3 text-amber-200" />
               Available from {shortAvailDate}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-2xs">
-              <Zap className="w-3 h-3 fill-amber-300 text-amber-300" />
-              AgriDirect Fulfilled
+            <span className="badge-direct">
+              <Zap className="w-3 h-3 fill-amber-500 text-amber-500" />
+              Direct Farm Trade
             </span>
           )}
 
@@ -154,9 +154,11 @@ export default function ListingCard({ listing }) {
               />
             ))}
           </div>
-          <span className="text-xs font-bold text-amber-700">{rating}</span>
+          <span className="text-xs font-bold text-amber-700">{Number(rating).toFixed(1)}</span>
           <span className="text-[11px] text-slate-400 group-hover/rating:underline">({reviewCount})</span>
-          <span className="text-[10px] text-emerald-600 font-medium ml-0.5">Reviews</span>
+          <span className="text-[10px] text-emerald-600 font-medium ml-0.5">
+            {reviewCount === 1 ? 'Review' : 'Reviews'}
+          </span>
         </button>
       </div>
 
@@ -255,16 +257,16 @@ export default function ListingCard({ listing }) {
             </div>
           </div>
 
-          {/* Amazon 2-tier Action Buttons */}
+          {/* Modern Action Buttons */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={handleAddToCart}
               disabled={qty <= 0}
-              className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
                 added
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-amber-100 hover:bg-amber-200/80 text-amber-950 border-amber-300 shadow-2xs active:scale-98'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border-emerald-300/90 shadow-2xs active:scale-[0.98]'
               }`}
             >
               {added ? (
@@ -274,7 +276,7 @@ export default function ListingCard({ listing }) {
                 </>
               ) : (
                 <>
-                  <ShoppingCart className="w-3.5 h-3.5 text-amber-800" />
+                  <ShoppingCart className="w-3.5 h-3.5 text-emerald-700" />
                   <span>{isFutureAvailable ? 'Pre-order' : 'Add to Cart'}</span>
                 </>
               )}
@@ -284,9 +286,9 @@ export default function ListingCard({ listing }) {
               type="button"
               onClick={handleBuyNow}
               disabled={qty <= 0}
-              className="py-2 px-3 rounded-xl text-xs font-bold bg-[#ffa41c] hover:bg-[#fa8900] text-slate-950 shadow-2xs transition-all flex items-center justify-center gap-1 active:scale-98"
+              className="py-2 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-md shadow-emerald-700/20 transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-50"
             >
-              <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+              <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
               <span>{isFutureAvailable ? 'Pre-order Now' : 'Buy Now'}</span>
             </button>
           </div>

@@ -22,8 +22,10 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 
 export default function AIInsights() {
+  const { t, isTamil } = useLanguage()
   const [listings, setListings] = useState([])
   const [selected, setSelected] = useState(null)
   const [forecast, setForecast] = useState(null)
@@ -70,11 +72,11 @@ export default function AIInsights() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AI Market Intelligence</h1>
-            <span className="badge-ai">Advisory Only</span>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('aiInsights.title', 'AI Market Intelligence')}</h1>
+            <span className="badge-ai">{t('aiInsights.advisoryOnly', 'Advisory Only')}</span>
           </div>
           <p className="text-slate-500 text-sm mt-1">
-            Machine learning models analyze regional demand patterns to help you price profitably. Your listings never change automatically.
+            {t('aiInsights.subtitle', 'Machine learning models analyze regional demand patterns to help you price profitably. Your listings never change automatically.')}
           </p>
         </div>
       </div>
@@ -92,12 +94,12 @@ export default function AIInsights() {
           <div className="w-16 h-16 rounded-2xl bg-ai-50 border border-ai-100 flex items-center justify-center text-ai-600 mx-auto mb-4">
             <Package className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-1">No Active Listings Yet</h3>
+          <h3 className="text-xl font-bold text-slate-800 mb-1">{t('aiInsights.noListings', 'No Active Listings Yet')}</h3>
           <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-            Publish your first produce listing to activate personalized AI price and demand forecasts.
+            {t('aiInsights.noListingsDesc', 'Publish your first produce listing to activate personalized AI price and demand forecasts.')}
           </p>
           <Link to="/farmer/listings/new" className="btn-primary">
-            Create Your First Listing
+            {t('aiInsights.createFirstListing', 'Create Your First Listing')}
           </Link>
         </div>
       ) : (
@@ -106,7 +108,7 @@ export default function AIInsights() {
           <div className="card p-4 border border-slate-200/80 shadow-soft mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-leaf-600" />
-              <span className="text-sm font-bold text-slate-800">Select Produce Listing:</span>
+              <span className="text-sm font-bold text-slate-800">{t('aiInsights.selectListing', 'Select Produce Listing:')}</span>
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
@@ -123,7 +125,7 @@ export default function AIInsights() {
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                     }`}
                   >
-                    {l.product_name} ({l.location || 'Local'})
+                    {l.product_name} ({l.location || t('common.local', 'Local')})
                   </button>
                 )
               })}
@@ -135,9 +137,9 @@ export default function AIInsights() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <BarChart2 className="w-5 h-5 text-ai-600" />
-                <h2 className="text-xl font-extrabold text-slate-900">Demand Forecasting</h2>
+                <h2 className="text-xl font-extrabold text-slate-900">{t('aiInsights.demandForecasting', 'Demand Forecasting')}</h2>
               </div>
-              <span className="badge-ai">AI FORECAST</span>
+              <span className="badge-ai">{t('aiInsights.aiForecastBadge', 'AI FORECAST')}</span>
             </div>
 
             {/* 3 Core Required Metric Cards */}
@@ -146,10 +148,10 @@ export default function AIInsights() {
               <div className="card p-5 border border-slate-200 shadow-soft bg-white">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    ACTUAL SUPPLY
+                    {t('aiInsights.actualSupply', 'ACTUAL SUPPLY')}
                   </span>
                   <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
-                    Real Database
+                    {t('aiInsights.realDatabase', 'Real Database')}
                   </span>
                 </div>
                 <div className="text-2xl font-extrabold text-slate-900 mt-2">
@@ -157,7 +159,7 @@ export default function AIInsights() {
                   <span className="text-xs font-medium text-slate-500 ml-1">{selected.unit}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Total active inventory currently listed by farmers in this category.
+                  {t('aiInsights.actualSupplyDesc', 'Total active inventory currently listed by farmers in this category.')}
                 </p>
               </div>
 
@@ -165,10 +167,10 @@ export default function AIInsights() {
               <div className="card p-5 border border-ai-200 shadow-soft bg-ai-50/30">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-ai-700">
-                    AI FORECAST
+                    {t('aiInsights.aiForecastTitle', 'AI FORECAST')}
                   </span>
                   <span className="text-[10px] bg-ai-100 text-ai-800 px-2 py-0.5 rounded-full font-bold">
-                    AI Prediction
+                    {t('aiInsights.aiPrediction', 'AI Prediction')}
                   </span>
                 </div>
                 <div className="text-2xl font-extrabold text-ai-900 mt-2">
@@ -178,13 +180,13 @@ export default function AIInsights() {
                       <span className="text-xs font-medium text-ai-700 ml-1">{selected.unit}</span>
                     </>
                   ) : (
-                    <span className="text-sm font-semibold text-slate-400">Data Pending</span>
+                    <span className="text-sm font-semibold text-slate-400">{t('aiInsights.dataPending', 'Data Pending')}</span>
                   )}
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">
                   {forecast?.has_sufficient_data
-                    ? `Predicted demand for upcoming 7-day window based on historical orders.`
-                    : `Requires at least 3 historical transaction points.`}
+                    ? t('aiInsights.predictedDemandDesc', 'Predicted demand for upcoming 7-day window based on historical orders.')
+                    : t('aiInsights.requiresHistory', 'Requires at least 3 historical transaction points.')}
                 </p>
               </div>
 
@@ -192,20 +194,20 @@ export default function AIInsights() {
               <div className="card p-5 border border-amber-200 shadow-soft bg-amber-50/30">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
-                    POTENTIAL SUPPLY GAP
+                    {t('aiInsights.supplyGap', 'POTENTIAL SUPPLY GAP')}
                   </span>
                   <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
-                    Market Gap
+                    {t('aiInsights.marketGap', 'Market Gap')}
                   </span>
                 </div>
                 <div className="text-2xl font-extrabold text-amber-950 mt-2">
                   {forecast?.has_sufficient_data && forecast?.potential_supply_gap != null ? (
                     forecast.potential_supply_gap > 0 ? (
                       <span className="text-amber-700">
-                        +{forecast.potential_supply_gap} <span className="text-xs font-medium">{selected.unit} deficit</span>
+                        +{forecast.potential_supply_gap} <span className="text-xs font-medium">{selected.unit} {t('aiInsights.deficit', 'deficit')}</span>
                       </span>
                     ) : (
-                      <span className="text-emerald-700 text-lg">No Gap (Supply Meets Demand)</span>
+                      <span className="text-emerald-700 text-lg">{t('aiInsights.noGap', 'No Gap (Supply Meets Demand)')}</span>
                     )
                   ) : (
                     <span className="text-sm font-semibold text-slate-400">N/A</span>
@@ -214,9 +216,9 @@ export default function AIInsights() {
                 <p className="text-[11px] text-slate-600 mt-1">
                   {forecast?.has_sufficient_data
                     ? (forecast.potential_supply_gap > 0
-                        ? `Forecast exceeds current supply — opportunity for higher production.`
-                        : `Current supply is adequate to cover projected regional demand.`)
-                    : `Cannot calculate gap without historical order data.`}
+                        ? t('aiInsights.gapOpportunity', 'Forecast exceeds current supply — opportunity for higher production.')
+                        : t('aiInsights.gapAdequate', 'Current supply is adequate to cover projected regional demand.'))
+                    : t('aiInsights.cannotCalculateGap', 'Cannot calculate gap without historical order data.')}
                 </p>
               </div>
             </div>
@@ -227,12 +229,10 @@ export default function AIInsights() {
                 <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-900">
                   <p className="font-bold text-sm text-amber-950 mb-0.5">
-                    Not enough historical data for reliable forecasting.
+                    {t('aiInsights.notEnoughDataTitle', 'Not enough historical data for reliable forecasting.')}
                   </p>
                   <p className="leading-relaxed">
-                    AgriDirect uses actual completed order transactions and buyer procurement records to train forecasting models. 
-                    Because there are currently fewer than 3 historical order events recorded for {selected.product_name}, 
-                    a forecast cannot be responsibly generated yet. <b>We never fabricate predictions or present synthetic numbers as real data.</b>
+                    {t('aiInsights.notEnoughDataDesc', 'AgriDirect uses actual completed order transactions and buyer procurement records to train forecasting models. Because there are currently fewer than 3 historical order events recorded for this crop, a forecast cannot be responsibly generated yet. We never fabricate predictions or present synthetic numbers as real data.')}
                   </p>
                 </div>
               </div>
@@ -248,9 +248,9 @@ export default function AIInsights() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-ai-600" />
-                    <h2 className="text-base font-bold text-slate-900">AI Price Recommendation</h2>
+                    <h2 className="text-base font-bold text-slate-900">{t('aiInsights.priceRecTitle', 'AI Price Recommendation')}</h2>
                   </div>
-                  <span className="badge-ai">AI RECOMMENDATION</span>
+                  <span className="badge-ai">{t('aiInsights.aiRecBadge', 'AI RECOMMENDATION')}</span>
                 </div>
 
                 {priceRec ? (
@@ -258,7 +258,7 @@ export default function AIInsights() {
                     <div className="p-4 bg-ai-50/50 border border-ai-100 rounded-xl mb-4">
                       <div className="flex justify-between items-baseline mb-2">
                         <span className="text-xs text-ai-700 font-bold uppercase tracking-wider">
-                          AI Recommended Range
+                          {t('aiInsights.recommendedRange', 'AI Recommended Range')}
                         </span>
                         <span className="text-2xl font-extrabold text-ai-900">
                           ₹{Number(priceRec.recommended_min)} – ₹{Number(priceRec.recommended_max)}
@@ -267,7 +267,7 @@ export default function AIInsights() {
                       </div>
 
                       <div className="flex justify-between items-baseline pt-2 border-t border-ai-100">
-                        <span className="text-xs text-slate-600 font-semibold">Actual Farmer Price</span>
+                        <span className="text-xs text-slate-600 font-semibold">{t('aiInsights.actualFarmerPrice', 'Actual Farmer Price')}</span>
                         <span className="text-lg font-extrabold text-emerald-700">
                           ₹{Number(priceRec.actual_farmer_price).toFixed(2)} /{selected.unit}
                         </span>
@@ -276,7 +276,7 @@ export default function AIInsights() {
 
                     {priceRec.reasoning && (
                       <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
-                        <b>Market Dynamics:</b> {priceRec.reasoning}
+                        <b>{t('aiInsights.marketDynamics', 'Market Dynamics')}:</b> {priceRec.reasoning}
                       </p>
                     )}
 
@@ -284,36 +284,36 @@ export default function AIInsights() {
                       <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="font-bold text-amber-900 flex items-center gap-1.5">
-                            Perishability Strategy: {priceRec.perishability_status}
+                            {t('aiInsights.perishabilityStrategy', 'Perishability Strategy')}: {priceRec.perishability_status}
                           </span>
                           {priceRec.expected_sell_by_date && (
                             <span className="text-amber-800 font-medium">
-                              Sell by: {priceRec.expected_sell_by_date}
+                              {t('aiInsights.sellBy', 'Sell by')}: {priceRec.expected_sell_by_date}
                             </span>
                           )}
                         </div>
                         {priceRec.recommended_action && (
                           <p className="text-amber-800 mt-1">
-                            <b>AI Clearance Action:</b> {priceRec.recommended_action}
+                            <b>{t('aiInsights.clearanceAction', 'AI Clearance Action')}:</b> {priceRec.recommended_action}
                           </p>
                         )}
                         {priceRec.eligible_channels?.length > 0 && (
                           <p className="text-amber-700 mt-1.5 text-[11px]">
-                            <b>Recommended Channels:</b> {priceRec.eligible_channels.join(', ')}
+                            <b>{t('aiInsights.recommendedChannels', 'Recommended Channels')}:</b> {priceRec.eligible_channels.join(', ')}
                           </p>
                         )}
                       </div>
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-slate-400 py-6 text-center">Loading price intelligence…</p>
+                  <p className="text-sm text-slate-400 py-6 text-center">{t('aiInsights.loadingPriceIntel', 'Loading price intelligence…')}</p>
                 )}
               </div>
 
               <div className="p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900 mt-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>
-                  <b>The AI recommendation must NEVER automatically change the farmer's price.</b> You retain 100% price autonomy. This range is strictly advisory to help inform your market pricing.
+                  <b>{t('aiInsights.autonomyBold', "The AI recommendation must NEVER automatically change the farmer's price.")}</b> {t('aiInsights.autonomyDesc', 'You retain 100% price autonomy. This range is strictly advisory to help inform your market pricing.')}
                 </span>
               </div>
             </div>
@@ -323,11 +323,11 @@ export default function AIInsights() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-leaf-600" />
-                  <h2 className="text-base font-bold text-slate-900">Regional Demand Pattern</h2>
+                  <h2 className="text-base font-bold text-slate-900">{t('aiInsights.regionalDemandPattern', 'Regional Demand Pattern')}</h2>
                 </div>
                 {forecast?.trend && (
                   <span className="badge-actual">
-                    {forecast.trend} trend
+                    {forecast.trend} {t('aiInsights.trend', 'trend')}
                   </span>
                 )}
               </div>
@@ -341,7 +341,7 @@ export default function AIInsights() {
                         <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} tickLine={false} />
                         <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                         <Tooltip 
-                          formatter={(v) => [`${v} units`, 'Projected Demand']}
+                          formatter={(v) => [`${v} units`, t('aiInsights.projectedDemand', 'Projected Demand')]}
                           contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}
                         />
                         <Bar dataKey="demand" fill="#16a34a" radius={[6, 6, 0, 0]} />
@@ -351,7 +351,7 @@ export default function AIInsights() {
 
                   {forecast?.mae != null && (
                     <div className="flex flex-wrap gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-100">
-                      <span>Accuracy Metrics:</span>
+                      <span>{t('aiInsights.accuracyMetrics', 'Accuracy Metrics:')}</span>
                       <span className="font-semibold text-slate-600">MAE: {forecast.mae}</span>
                       <span>•</span>
                       <span className="font-semibold text-slate-600">RMSE: {forecast.rmse}</span>
@@ -363,9 +363,9 @@ export default function AIInsights() {
               ) : (
                 <div className="h-52 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-100 rounded-xl">
                   <BarChart2 className="w-10 h-10 text-slate-300 mb-2" />
-                  <p className="text-sm font-semibold text-slate-600">Insufficient Data for Graph</p>
+                  <p className="text-sm font-semibold text-slate-600">{t('aiInsights.insufficientDataGraph', 'Insufficient Data for Graph')}</p>
                   <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                    Visual weekly projections are unlocked once real ordering volume is recorded for this produce.
+                    {t('aiInsights.insufficientDataGraphDesc', 'Visual weekly projections are unlocked once real ordering volume is recorded for this produce.')}
                   </p>
                 </div>
               )}

@@ -1,6 +1,18 @@
 import axios from 'axios'
+import { Capacitor } from '@capacitor/core'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const resolveBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  // When running inside native mobile APK, loopback localhost doesn't exist on device; default to live backend API
+  if (Capacitor.isNativePlatform()) {
+    return 'https://agridirect-back.onrender.com'
+  }
+  return 'http://localhost:8000'
+}
+
+const API_BASE_URL = resolveBaseUrl()
 
 export const api = axios.create({ baseURL: API_BASE_URL })
 
@@ -16,6 +28,10 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('agridirect_token')
       localStorage.removeItem('agridirect_role')
+      localStorage.removeItem('agridirect_user')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('agridirect:unauthorized'))
+      }
     }
     return Promise.reject(err)
   }
@@ -25,6 +41,7 @@ api.interceptors.response.use(
 export const registerFarmer = (data) => api.post('/api/auth/register/farmer', data)
 export const registerBuyer = (data) => api.post('/api/auth/register/buyer', data)
 export const login = (data) => api.post('/api/auth/login', data)
+export const googleLogin = (data) => api.post('/api/auth/google', data)
 export const getMe = () => api.get('/api/auth/me')
 
 // ---- Listings (farmer) ----
@@ -43,6 +60,14 @@ export const myOrders = () => api.get('/api/orders/mine')
 export const sellerOrders = () => api.get('/api/orders/seller')
 export const updateOrderStatus = (id, newStatus) =>
   api.put(`/api/orders/${id}/status`, null, { params: { new_status: newStatus } })
+export const cancelOrder = (id, reason = null) =>
+  api.post(`/api/orders/${id}/cancel`, { reason })
+
+// ---- Advance Demand / Early Booking ----
+export const createAdvanceDemand = (data) => api.post('/api/advance-demands', data)
+export const myAdvanceDemands = () => api.get('/api/advance-demands/mine')
+export const openAdvanceDemands = () => api.get('/api/advance-demands/open')
+export const cancelAdvanceDemand = (id) => api.post(`/api/advance-demands/${id}/cancel`)
 
 // ---- Payments ----
 export const verifyPayment = (data) => api.post('/api/payments/verify', data)
@@ -59,10 +84,10 @@ export const assignedTransportRequests = () => api.get('/api/transport/requests/
 export const availableTransportJobs = () => api.get('/api/transport/jobs/available')
 export const myTransportJobs = () => api.get('/api/transport/jobs/mine')
 export const acceptTransportJob = (id) => api.post(`/api/transport/jobs/${id}/accept`)
-export const updateTransportJobStatus = (id, newStatus) =>
-  api.put(`/api/transport/jobs/${id}/status`, null, { params: { new_status: newStatus } })
-export const updateTransportStatus = (id, newStatus) =>
-  api.put(`/api/transport/requests/${id}/status`, null, { params: { new_status: newStatus } })
+export const updateTransportJobStatus = (id, newStatus, otp = null) =>
+  api.put(`/api/transport/jobs/${id}/status`, null, { params: { new_status: newStatus, ...(otp ? { otp } : {}) } })
+export const updateTransportStatus = (id, newStatus, otp = null) =>
+  api.put(`/api/transport/requests/${id}/status`, null, { params: { new_status: newStatus, ...(otp ? { otp } : {}) } })
 export const updateVehicleLocation = (data) => api.put('/api/transport/vehicle/location', data)
 export const trackTransportRequest = (id) => api.get(`/api/transport/requests/${id}/track`)
 
@@ -102,8 +127,8 @@ export const availableBatches = () => api.get('/api/batches/available')
 export const myBatches = () => api.get('/api/batches/mine')
 export const batchDetail = (id) => api.get(`/api/batches/${id}`)
 export const acceptBatch = (id) => api.post(`/api/batches/${id}/accept`)
-export const updateBatchStatus = (id, newStatus) =>
-  api.put(`/api/batches/${id}/status`, null, { params: { new_status: newStatus } })
+export const updateBatchStatus = (id, newStatus, otp = null) =>
+  api.put(`/api/batches/${id}/status`, null, { params: { new_status: newStatus, ...(otp ? { otp } : {}) } })
 export const batchAdminStats = () => api.get('/api/batches/admin/stats')
 
 // ---- Customer Feedback, Ratings & Photo Upload ----
@@ -122,6 +147,18 @@ export const getMyReviews = () => api.get('/api/reviews/mine')
 export const interactWithVoiceAssistant = (data) => api.post('/api/ai/voice/interact', data)
 export const explainAiRoute = (data) => api.post('/api/ai/logistics/explain-route', data)
 export const getAiLogisticsPlans = (params) => api.get('/api/ai/logistics/plans', { params })
+
+// ---- Database-Driven Vehicle Rates & Logistics Settings ----
+export const getVehicleRates = () => api.get('/api/logistics/rates')
+export const updateVehicleRate = (id, data) => api.put(`/api/logistics/rates/${id}`, data)
+export const getLogisticsSettings = () => api.get('/api/logistics/settings')
+export const updateLogisticsSetting = (key, data) => api.put(`/api/logistics/settings/${key}`, data)
+export const quoteTransportFee = (data) => api.post('/api/orders/quote-transport-fee', data)
+
+// ---- Government of India (data.gov.in) Live Mandi Prices ----
+export const getLiveMandiPrices = (params) => api.get('/api/marketplace/live-mandi-prices', { params })
+
+
 
 
 

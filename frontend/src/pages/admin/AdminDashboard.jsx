@@ -32,11 +32,15 @@ import {
   triggerAutoBatch,
   listBatches,
   batchAdminStats,
+  getVehicleRates,
+  updateVehicleRate,
 } from '../../services/api.js'
+import { useLanguage } from '../../context/LanguageContext.jsx'
 
 const USER_COLORS = ['#16a34a', '#0284c7', '#d97706']
 
 export default function AdminDashboard() {
+  const { t, isTamil } = useLanguage()
   const [data, setData] = useState(null)
   const [logistics, setLogistics] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -48,17 +52,26 @@ export default function AdminDashboard() {
   const [autoBatching, setAutoBatching] = useState(false)
   const [batchMsg, setBatchMsg] = useState('')
 
+  // Database-Driven Vehicle Rates State
+  const [vehicleRates, setVehicleRates] = useState([])
+  const [editingRateId, setEditingRateId] = useState(null)
+  const [editFormData, setEditFormData] = useState({})
+  const [savingRate, setSavingRate] = useState(false)
+  const [rateSuccessMsg, setRateSuccessMsg] = useState('')
+
   const loadData = () => {
     setLoading(true)
     Promise.all([
       adminDashboard().catch((err) => { console.error(err); return { data: null } }),
       batchAdminStats().catch((err) => { console.error(err); return { data: null } }),
       listBatches().catch((err) => { console.error(err); return { data: [] } }),
+      getVehicleRates().catch((err) => { console.error(err); return { data: [] } }),
     ])
-      .then(([dashRes, statsRes, batchesRes]) => {
+      .then(([dashRes, statsRes, batchesRes, ratesRes]) => {
         if (dashRes.data) setData(dashRes.data)
         if (statsRes.data) setBatchStats(statsRes.data)
         if (batchesRes.data) setBatchesList(batchesRes.data)
+        if (ratesRes.data) setVehicleRates(ratesRes.data)
       })
       .finally(() => setLoading(false))
   }
@@ -93,19 +106,46 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleEditRate = (rate) => {
+    setEditingRateId(rate.id)
+    setEditFormData({
+      base_fare: rate.base_fare,
+      rate_per_km: rate.rate_per_km,
+      minimum_fare: rate.minimum_fare,
+      loading_unloading_charge: rate.loading_unloading_charge,
+      waiting_charge_per_hour: rate.waiting_charge_per_hour,
+    })
+    setRateSuccessMsg('')
+  }
+
+  const handleSaveRate = async (rateId) => {
+    setSavingRate(true)
+    try {
+      const res = await updateVehicleRate(rateId, editFormData)
+      setVehicleRates((prev) => prev.map((r) => (r.id === rateId ? res.data : r)))
+      setEditingRateId(null)
+      setRateSuccessMsg(`Rates updated successfully for ${res.data.vehicle_type}! Live transport pricing updated.`)
+      setTimeout(() => setRateSuccessMsg(''), 5000)
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to update vehicle rate.')
+    } finally {
+      setSavingRate(false)
+    }
+  }
+
   // Chart data preparation
   const userDistribution = data ? [
-    { name: 'Farmers', count: data.farmers, color: '#16a34a' },
-    { name: 'Buyers', count: data.buyers, color: '#0284c7' },
-    { name: 'Transporters', count: data.transporters || 0, color: '#7c3aed' },
+    { name: t('roles.farmer', 'Farmers'), count: data.farmers, color: '#16a34a' },
+    { name: t('roles.buyer', 'Buyers'), count: data.buyers, color: '#0284c7' },
+    { name: t('roles.transporter', 'Transporters'), count: data.transporters || 0, color: '#7c3aed' },
   ] : []
 
   const stats = data ? [
-    { label: 'Total Registered Users', value: data.total_users, icon: Users, color: 'text-blue-600 bg-blue-50', actual: false },
-    { label: 'Active Farm Listings', value: data.active_listings, icon: Layers, color: 'text-leaf-700 bg-leaf-50', actual: true },
-    { label: 'Completed Orders', value: data.total_orders, icon: ShoppingBag, color: 'text-purple-600 bg-purple-50', actual: true },
-    { label: 'Gross Merchandise Value', value: `₹${Number(data.gmv || 0).toLocaleString('en-IN')}`, icon: IndianRupee, color: 'text-emerald-600 bg-emerald-50', actual: true },
-    { label: 'Platform Fee Revenue', value: `₹${Number(data.platform_fee_revenue || 0).toLocaleString('en-IN')}`, icon: TrendingUp, color: 'text-amber-600 bg-amber-50', actual: true },
+    { label: t('admin.totalUsers', 'Total Registered Users'), value: data.total_users, icon: Users, color: 'text-blue-600 bg-blue-50', actual: false },
+    { label: t('admin.activeListings', 'Active Farm Listings'), value: data.active_listings, icon: Layers, color: 'text-leaf-700 bg-leaf-50', actual: true },
+    { label: t('admin.completedOrders', 'Completed Orders'), value: data.total_orders, icon: ShoppingBag, color: 'text-purple-600 bg-purple-50', actual: true },
+    { label: t('admin.gmv', 'Gross Merchandise Value'), value: `₹${Number(data.gmv || 0).toLocaleString('en-IN')}`, icon: IndianRupee, color: 'text-emerald-600 bg-emerald-50', actual: true },
+    { label: t('admin.revenue', 'Platform Fee Revenue'), value: `₹${Number(data.platform_fee_revenue || 0).toLocaleString('en-IN')}`, icon: TrendingUp, color: 'text-amber-600 bg-amber-50', actual: true },
   ] : []
 
   return (
@@ -116,11 +156,11 @@ export default function AdminDashboard() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-leaf-700/40 text-leaf-300 text-xs font-semibold mb-3 border border-leaf-600/40">
               <ShieldCheck className="w-3.5 h-3.5" />
-              Platform Administration & Analytics
+              {t('admin.badge', 'Platform Administration & Analytics')}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold font-display">System Control & Operations</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold font-display">{t('admin.title', 'System Control & Operations')}</h1>
             <p className="text-gray-300 text-sm mt-1 max-w-xl">
-              Audit platform-wide transaction liquidity, direct farmer payouts, user registrations, and multi-stop logistics routing.
+              {t('admin.subtitle', 'Audit platform-wide transaction liquidity, direct farmer payouts, user registrations, and multi-stop logistics routing.')}
             </p>
           </div>
           <div className="flex gap-3">
@@ -129,7 +169,7 @@ export default function AdminDashboard() {
               className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold flex items-center gap-2 transition backdrop-blur-sm border border-white/10"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('common.refresh', 'Refresh')}
             </button>
           </div>
         </div>
@@ -162,7 +202,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <p className="text-2xl font-extrabold text-gray-900">{st.value}</p>
-                    {st.actual && <span className="badge-actual">Actual</span>}
+                    {st.actual && <span className="badge-actual">{t('common.actual', 'Actual')}</span>}
                   </div>
                 </div>
               )
@@ -185,10 +225,10 @@ export default function AdminDashboard() {
             <div className="card p-6 border border-gray-100 lg:col-span-2">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-bold text-gray-900">User Network Distribution</h3>
-                  <p className="text-xs text-gray-500">Breakdown of platform participants</p>
+                  <h3 className="font-bold text-gray-900">{t('admin.userDistribution', 'User Network Distribution')}</h3>
+                  <p className="text-xs text-gray-500">{t('admin.userDistributionSub', 'Breakdown of platform participants')}</p>
                 </div>
-                <span className="badge-actual">Actual DB Records</span>
+                <span className="badge-actual">{t('admin.actualDb', 'Actual DB Records')}</span>
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -211,27 +251,27 @@ export default function AdminDashboard() {
             {/* Platform Health Card */}
             <div className="card p-6 border border-gray-100 flex flex-col justify-between">
               <div>
-                <h3 className="font-bold text-gray-900 mb-1">Ecosystem Balance</h3>
-                <p className="text-xs text-gray-500 mb-4">Active participants ratio</p>
+                <h3 className="font-bold text-gray-900 mb-1">{t('admin.ecosystemBalance', 'Ecosystem Balance')}</h3>
+                <p className="text-xs text-gray-500 mb-4">{t('admin.activeRatio', 'Active participants ratio')}</p>
 
                 <div className="space-y-3 text-xs">
                   <div className="flex items-center justify-between p-2.5 rounded-lg bg-green-50 border border-green-200">
-                    <span className="font-semibold text-green-900">Verified Farmers</span>
+                    <span className="font-semibold text-green-900">{t('admin.verifiedFarmers', 'Verified Farmers')}</span>
                     <span className="font-extrabold text-green-700">{data.farmers}</span>
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-                    <span className="font-semibold text-blue-900">Registered Buyers</span>
+                    <span className="font-semibold text-blue-900">{t('admin.registeredBuyers', 'Registered Buyers')}</span>
                     <span className="font-extrabold text-blue-700">{data.buyers}</span>
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-lg bg-purple-50 border border-purple-200">
-                    <span className="font-semibold text-purple-900">Fleet Transporters</span>
+                    <span className="font-semibold text-purple-900">{t('admin.fleetTransporters', 'Fleet Transporters')}</span>
                     <span className="font-extrabold text-purple-700">{data.transporters || 0}</span>
                   </div>
                 </div>
               </div>
 
               <div className="pt-4 border-t border-gray-100 text-[11px] text-gray-400 mt-4">
-                Direct buyer-to-farmer transactions preserve 100% grower margin without auction fee deductions.
+                {t('admin.directTradeMarginNote', 'Direct buyer-to-farmer transactions preserve 100% grower margin without auction fee deductions.')}
               </div>
             </div>
           </div>
@@ -246,10 +286,10 @@ export default function AdminDashboard() {
                   </span>
                   <div>
                     <h3 className="font-extrabold font-display text-lg text-slate-900">
-                      Consolidated Batched Delivery & 3PL Fleet Allocation
+                      {t('admin.consolidationTitle', 'Consolidated Batched Delivery & 3PL Fleet Allocation')}
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Multi-order grouped vehicle trips across Tenkasi, Tirunelveli, and Thoothukudi Central Warehouses
+                      {t('admin.consolidationSub', 'Multi-order grouped vehicle trips across Tenkasi, Tirunelveli, and Thoothukudi Central Warehouses')}
                     </p>
                   </div>
                 </div>
@@ -262,10 +302,10 @@ export default function AdminDashboard() {
                   onChange={(e) => setBatchDistrict(e.target.value)}
                   className="input py-2 px-3 text-xs w-44 bg-white border border-indigo-200 rounded-xl"
                 >
-                  <option value="">All Supported Districts</option>
-                  <option value="Tenkasi">Tenkasi</option>
-                  <option value="Tirunelveli">Tirunelveli</option>
-                  <option value="Thoothukudi">Thoothukudi</option>
+                  <option value="">{t('admin.allSupportedDistricts', 'All Supported Districts')}</option>
+                  <option value="Tenkasi">{isTamil ? 'தென்காசி' : 'Tenkasi'}</option>
+                  <option value="Tirunelveli">{isTamil ? 'திருநெல்வேலி' : 'Tirunelveli'}</option>
+                  <option value="Thoothukudi">{isTamil ? 'தூத்துக்குடி' : 'Thoothukudi'}</option>
                 </select>
 
                 <button
@@ -274,7 +314,7 @@ export default function AdminDashboard() {
                   className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${autoBatching ? 'animate-spin' : ''}`} />
-                  {autoBatching ? 'Consolidating Orders...' : 'Run Auto-Batching Engine'}
+                  {autoBatching ? t('admin.consolidating', 'Consolidating Orders...') : t('admin.runBatching', 'Run Auto-Batching Engine')}
                 </button>
               </div>
             </div>
@@ -290,32 +330,32 @@ export default function AdminDashboard() {
             {batchStats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Batches</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.totalBatches', 'Total Batches')}</p>
                   <p className="text-xl font-black text-slate-900 mt-1">{batchStats.total_batches}</p>
-                  <p className="text-[10px] text-slate-400">{batchStats.total_orders_in_batches} orders grouped</p>
+                  <p className="text-[10px] text-slate-400">{batchStats.total_orders_in_batches} {t('admin.ordersGrouped', 'orders grouped')}</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Claims</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.pendingClaims', 'Pending Claims')}</p>
                   <p className="text-xl font-black text-amber-600 mt-1">{batchStats.pending_batches}</p>
-                  <p className="text-[10px] text-amber-600/70">Awaiting 3PL drivers</p>
+                  <p className="text-[10px] text-amber-600/70">{t('admin.awaitingDrivers', 'Awaiting 3PL drivers')}</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In Transit</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.inTransit', 'In Transit')}</p>
                   <p className="text-xl font-black text-sky-600 mt-1">{batchStats.active_transport_jobs}</p>
-                  <p className="text-[10px] text-sky-600/70">On the road</p>
+                  <p className="text-[10px] text-sky-600/70">{t('admin.onTheRoad', 'On the road')}</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivered</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.delivered', 'Delivered')}</p>
                   <p className="text-xl font-black text-emerald-600 mt-1">{batchStats.completed_deliveries}</p>
-                  <p className="text-[10px] text-emerald-600/70">{batchStats.total_customers_served} customers served</p>
+                  <p className="text-[10px] text-emerald-600/70">{batchStats.total_customers_served} {t('admin.customersServed', 'customers served')}</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cargo Weight</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.cargoWeight', 'Cargo Weight')}</p>
                   <p className="text-xl font-black text-slate-900 mt-1">{batchStats.total_cargo_transported_kg} <span className="text-xs font-normal">kg</span></p>
-                  <p className="text-[10px] text-slate-400">Total freight moved</p>
+                  <p className="text-[10px] text-slate-400">{t('admin.totalFreightMoved', 'Total freight moved')}</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warehouses</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('admin.warehouses', 'Warehouses')}</p>
                   <p className="text-xl font-black text-purple-600 mt-1">3</p>
                   <p className="text-[10px] text-purple-600/70">TKS &bull; TNV &bull; TUT</p>
                 </div>
@@ -324,16 +364,16 @@ export default function AdminDashboard() {
 
             {/* Warehouse Hubs Badges */}
             <div className="p-3 rounded-xl bg-white border border-indigo-100 mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <span className="font-bold text-slate-700">Farmer Aggregation Hubs (Logistics Infrastructure Only &bull; No Commercial Resale):</span>
+              <span className="font-bold text-slate-700">{t('admin.hubBanner', 'Farmer Aggregation Hubs (Logistics Infrastructure Only • No Commercial Resale):')}</span>
               <div className="flex flex-wrap gap-2">
                 <span className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-semibold">
-                  Tenkasi Central Agri-Warehouse
+                  {t('transport.tenkasiWarehouse', 'Tenkasi Central Agri-Warehouse')}
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 font-semibold">
-                  Tirunelveli Central Agri-Warehouse
+                  {t('transport.tirunelveliWarehouse', 'Tirunelveli Central Agri-Warehouse')}
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 font-semibold">
-                  Thoothukudi Port Agri-Warehouse
+                  {t('transport.thoothukudiWarehouse', 'Thoothukudi Port Agri-Warehouse')}
                 </span>
               </div>
             </div>
@@ -341,7 +381,7 @@ export default function AdminDashboard() {
             {/* Batches Table */}
             {batchesList.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-500">
-                No consolidated delivery batches created yet. Click "Run Auto-Batching Engine" above or place orders across districts.
+                {t('admin.noBatches', 'No consolidated delivery batches created yet. Click "Run Auto-Batching Engine" above or place orders across districts.')}
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -349,23 +389,23 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                       <tr>
-                        <th className="py-3 px-4">Batch Code</th>
-                        <th className="py-3 px-4">Destination District</th>
-                        <th className="py-3 px-4">Cargo Weight</th>
-                        <th className="py-3 px-4">Orders</th>
-                        <th className="py-3 px-4">Stops</th>
-                        <th className="py-3 px-4">Est. Payout</th>
-                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">{t('admin.batchCode', 'Batch Code')}</th>
+                        <th className="py-3 px-4">{t('admin.destDistrict', 'Destination District')}</th>
+                        <th className="py-3 px-4">{t('admin.cargoWeight', 'Cargo Weight')}</th>
+                        <th className="py-3 px-4">{t('admin.ordersCount', 'Orders')}</th>
+                        <th className="py-3 px-4">{t('admin.stopsCount', 'Stops')}</th>
+                        <th className="py-3 px-4">{t('admin.estPayout', 'Est. Payout')}</th>
+                        <th className="py-3 px-4">{t('admin.status', 'Status')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {batchesList.map((b) => (
                         <tr key={b.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3 px-4 font-mono font-bold text-indigo-900">{b.batch_code}</td>
-                          <td className="py-3 px-4 font-semibold text-slate-800">{b.delivery_area} Hub</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{b.delivery_area} {t('marketplace.hub', 'Hub')}</td>
                           <td className="py-3 px-4 font-bold text-slate-900">{Number(b.total_quantity_kg).toFixed(1)} kg</td>
-                          <td className="py-3 px-4">{b.total_orders_count} customer order(s)</td>
-                          <td className="py-3 px-4">{b.stops ? b.stops.length : 0} stops</td>
+                          <td className="py-3 px-4">{b.total_orders_count} {t('admin.ordersSuffix', 'customer order(s)')}</td>
+                          <td className="py-3 px-4">{b.stops ? b.stops.length : 0} {t('admin.stopsSuffix', 'stops')}</td>
                           <td className="py-3 px-4 font-extrabold text-emerald-600">₹{Number(b.estimated_logistics_cost || 0).toFixed(0)}</td>
                           <td className="py-3 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
@@ -385,6 +425,163 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Database-Driven Vehicle Rates & Pricing Section */}
+          <div className="card p-6 border-2 border-indigo-100 bg-gradient-to-b from-white to-slate-50 shadow-soft-lg rounded-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-indigo-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-lg text-slate-900">
+                      {t('admin.vehiclePricingTitle', 'Vehicle Pricing & Transport Rates (Database-Driven)')}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {t('admin.vehiclePricingSub', 'Configure base fares, per-km rates, and minimum fares across fleet categories without modifying code.')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {rateSuccessMsg && (
+              <div className="p-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-bold flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>{rateSuccessMsg}</span>
+              </div>
+            )}
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">{t('admin.vehicleCategory', 'Vehicle Category')}</th>
+                      <th className="py-3 px-4">{t('admin.baseFare', 'Base Fare (₹)')}</th>
+                      <th className="py-3 px-4">{t('admin.ratePerKm', 'Rate / KM (₹)')}</th>
+                      <th className="py-3 px-4">{t('admin.minFare', 'Min Fare (₹)')}</th>
+                      <th className="py-3 px-4">{t('admin.loadingCharge', 'Loading / Unloading (₹)')}</th>
+                      <th className="py-3 px-4">{t('admin.waitingCharge', 'Waiting / Hr (₹)')}</th>
+                      <th className="py-3 px-4">{t('admin.status', 'Status')}</th>
+                      <th className="py-3 px-4 text-right">{t('admin.action', 'Action')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {vehicleRates.map((r) => {
+                      const isEditing = editingRateId === r.id
+                      return (
+                        <tr key={r.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2 font-bold text-slate-900">
+                              <span>{r.vehicle_type === 'BIKE' ? `🛵 ${t('transport.expressBike', 'Express Bike (≤50 kg)')}` : r.vehicle_type === 'MINI_TRUCK' ? `🚐 ${t('transport.miniTruck', 'Mini Truck (Tata Ace)')}` : `🚛 ${t('transport.heavyCargoTruck', 'Heavy Cargo Truck')}`}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="input py-1 px-2 text-xs w-24"
+                                value={editFormData.base_fare}
+                                onChange={(e) => setEditFormData({ ...editFormData, base_fare: e.target.value })}
+                              />
+                            ) : (
+                              <span className="font-bold text-slate-800">₹{Number(r.base_fare).toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="input py-1 px-2 text-xs w-24"
+                                value={editFormData.rate_per_km}
+                                onChange={(e) => setEditFormData({ ...editFormData, rate_per_km: e.target.value })}
+                              />
+                            ) : (
+                              <span className="font-bold text-slate-800">₹{Number(r.rate_per_km).toFixed(2)} / km</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="input py-1 px-2 text-xs w-24"
+                                value={editFormData.minimum_fare}
+                                onChange={(e) => setEditFormData({ ...editFormData, minimum_fare: e.target.value })}
+                              />
+                            ) : (
+                              <span className="font-bold text-slate-800">₹{Number(r.minimum_fare).toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="input py-1 px-2 text-xs w-24"
+                                value={editFormData.loading_unloading_charge}
+                                onChange={(e) => setEditFormData({ ...editFormData, loading_unloading_charge: e.target.value })}
+                              />
+                            ) : (
+                              <span className="text-slate-700">₹{Number(r.loading_unloading_charge || 0).toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="input py-1 px-2 text-xs w-24"
+                                value={editFormData.waiting_charge_per_hour}
+                                onChange={(e) => setEditFormData({ ...editFormData, waiting_charge_per_hour: e.target.value })}
+                              />
+                            ) : (
+                              <span className="text-slate-700">₹{Number(r.waiting_charge_per_hour || 0).toFixed(2)} / hr</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                              {t('common.active', 'Active')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {isEditing ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleSaveRate(r.id)}
+                                  disabled={savingRate}
+                                  className="btn-primary py-1 px-3 text-xs"
+                                >
+                                  {savingRate ? t('admin.saving', 'Saving...') : t('common.save', 'Save')}
+                                </button>
+                                <button
+                                  onClick={() => setEditingRateId(null)}
+                                  className="btn-secondary py-1 px-3 text-xs"
+                                >
+                                  {t('common.cancel', 'Cancel')}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEditRate(r)}
+                                className="btn-secondary py-1 px-3 text-xs font-bold hover:border-indigo-500 hover:text-indigo-600 transition"
+                              >
+                                {t('admin.editRates', 'Edit Rates')}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           {/* Logistics Optimizer Section */}

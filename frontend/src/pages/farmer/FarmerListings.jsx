@@ -22,8 +22,8 @@ export default function FarmerListings() {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState(null)
   const { addToast } = useToast()
-  const { language } = useLanguage()
-  const isTa = language === 'ta'
+  const { language, isTamil } = useLanguage()
+  const isTa = isTamil
 
   const load = () => {
     setLoading(true)
@@ -35,13 +35,13 @@ export default function FarmerListings() {
   useEffect(load, [])
 
   const handleDelete = async (id, name) => {
-    if (!confirm(`Are you sure you want to delete the listing for "${name}"?`)) return
+    if (!confirm(isTa ? `"${name}" பட்டியலை நிச்சயமாக நீக்க விரும்புகிறீர்களா?` : `Are you sure you want to delete the listing for "${name}"?`)) return
     try {
       await deleteListing(id)
-      addToast(`Deleted listing "${name}".`)
+      addToast(isTa ? `"${name}" பட்டியல் நீக்கப்பட்டது.` : `Deleted listing "${name}".`)
       load()
     } catch (err) {
-      addToast('Could not delete listing.', 'error')
+      addToast(isTa ? 'பட்டியலை நீக்க முடியவில்லை.' : 'Could not delete listing.', 'error')
     }
   }
 
@@ -49,10 +49,10 @@ export default function FarmerListings() {
     setTogglingId(listing.id)
     try {
       await updateListing(listing.id, { is_active: !listing.is_active })
-      addToast(`Listing marked as ${!listing.is_active ? 'Active' : 'Inactive'}.`)
+      addToast(isTa ? `பட்டியல் ${!listing.is_active ? 'செயலில் உள்ளது' : 'முடக்கப்பட்டது'} என மாற்றப்பட்டது.` : `Listing marked as ${!listing.is_active ? 'Active' : 'Inactive'}.`)
       load()
     } catch (err) {
-      addToast('Could not update listing status.', 'error')
+      addToast(isTa ? 'பட்டியல் நிலையை மாற்ற முடியவில்லை.' : 'Could not update listing status.', 'error')
     } finally {
       setTogglingId(null)
     }
@@ -64,14 +64,18 @@ export default function FarmerListings() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Produce Listings</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            {isTa ? 'விளைபொருள் பட்டியல்கள்' : 'Produce Listings'}
+          </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Manage your direct marketplace items. Active listings are immediately visible to buyers.
+            {isTa 
+              ? 'உங்கள் நேரடி சந்தை பொருட்களை நிர்வகிக்கவும். செயலில் உள்ள பட்டியல்கள் வாங்குபவர்களுக்கு உடனடியாக தோன்றும்.' 
+              : 'Manage your direct marketplace items. Active listings are immediately visible to buyers.'}
           </p>
         </div>
         <Link to="/farmer/listings/new" className="btn-primary py-2.5 px-4 text-sm font-semibold shadow-md">
           <Plus className="w-4 h-4" />
-          Add New Listing
+          {isTa ? 'புதிய பட்டியல் சேர்' : 'Add New Listing'}
         </Link>
       </div>
 
@@ -81,10 +85,10 @@ export default function FarmerListings() {
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
             <p className="font-bold text-sm">
-              Perishability Notice: Active lot(s) approaching sell-by date
+              {isTa ? 'அழுகக்கூடிய விளைபொருள் அறிவிப்பு: சில விளைபொருட்கள் காலாவதி தேதியை நெருங்குகின்றன' : 'Perishability Notice: Active lot(s) approaching sell-by date'}
             </p>
             <p className="mt-0.5 text-amber-800">
-              Our algorithm is actively prioritizing nearby bulk buyers, restaurants, and food processors to accelerate off-take and reduce avoidable waste.
+              {isTa ? 'கழிவைத் தவிர்க்கவும் விரைவாக விற்கவும் அருகிலுள்ள மொத்த வாங்குபவர்கள் மற்றும் உணவகங்களுக்கு முன்னுரிமை அளிக்கப்படுகிறது.' : 'Our algorithm is actively prioritizing nearby bulk buyers, restaurants, and food processors to accelerate off-take and reduce avoidable waste.'}
             </p>
           </div>
         </div>
@@ -101,12 +105,14 @@ export default function FarmerListings() {
           <div className="w-16 h-16 rounded-2xl bg-leaf-50 border border-leaf-100 flex items-center justify-center text-leaf-600 mx-auto mb-4">
             <Package className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-1">No Listings Created Yet</h3>
+          <h3 className="text-xl font-bold text-slate-800 mb-1">
+            {isTa ? 'பட்டியல்கள் எதுவும் இதுவரை உருவாக்கப்படவில்லை' : 'No Listings Created Yet'}
+          </h3>
           <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-            Add your harvested or expected crops to connect with buyers directly at zero commission.
+            {isTa ? 'இடைத்தரகர் கமிஷன் இன்றி வாங்குபவர்களுடன் நேரடியாக இணைய உங்கள் விளைச்சலைப் பட்டியலிடுங்கள்.' : 'Add your harvested or expected crops to connect with buyers directly at zero commission.'}
           </p>
           <Link to="/farmer/listings/new" className="btn-primary">
-            Create Your First Listing
+            {isTa ? 'உங்கள் முதல் பட்டியலை உருவாக்கவும்' : 'Create Your First Listing'}
           </Link>
         </div>
       ) : (
@@ -125,7 +131,7 @@ export default function FarmerListings() {
                       {l.product_name}
                     </h3>
                     <span className={l.is_active ? 'badge-actual' : 'badge-demo'}>
-                      {l.is_active ? 'Active on Marketplace' : 'Paused / Inactive'}
+                      {l.is_active ? (isTa ? 'சந்தையில் செயலில் உள்ளது' : 'Active on Marketplace') : (isTa ? 'இடைநிறுத்தப்பட்டது' : 'Paused / Inactive')}
                     </span>
                     {l.perishability_status && (
                       <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
@@ -145,7 +151,7 @@ export default function FarmerListings() {
                   <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-600">
                     <span className="font-bold text-slate-900 flex items-center gap-1">
                       <Scale className="w-3.5 h-3.5 text-leaf-600" />
-                      {Number(l.quantity_available)} {l.unit} available
+                      {Number(l.quantity_available)} {l.unit} {isTa ? 'இருப்பு உள்ளது' : 'available'}
                     </span>
                     <span>•</span>
                     <span className="font-bold text-emerald-700 flex items-center gap-1">
@@ -155,7 +161,7 @@ export default function FarmerListings() {
                       <>
                         <span>•</span>
                         <span className="text-slate-600 font-medium">
-                          Sell-by: <b className="text-slate-800">{l.expected_sell_by_date}</b>
+                          {isTa ? 'விற்பனைக்குள்:' : 'Sell-by:'} <b className="text-slate-800">{l.expected_sell_by_date}</b>
                         </span>
                       </>
                     )}
@@ -173,7 +179,7 @@ export default function FarmerListings() {
                         <span>•</span>
                         <span className="flex items-center gap-1 text-slate-500">
                           <Tag className="w-3.5 h-3.5 text-slate-400" />
-                          Grade {l.quality_grade}
+                          {isTa ? 'தரம்' : 'Grade'} {l.quality_grade}
                         </span>
                       </>
                     )}

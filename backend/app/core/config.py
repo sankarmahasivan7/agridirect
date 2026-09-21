@@ -48,5 +48,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-flash-latest"
 
+    # Government of India Data Portal (data.gov.in) Mandi / Market Prices
+    DATA_GOV_API_KEY: str | None = "579b464db66ec23bdd000001660a70c6e57a4d3c64e8cea45764f6e9"
+    DATA_GOV_RESOURCE_ID: str = "9ef84268-d588-465a-a308-a864a43d0070"
+
 
 settings = Settings()

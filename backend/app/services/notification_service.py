@@ -38,14 +38,16 @@ def notify_order_placed(db: Session, order: Order):
     2. Notifies each Seller (Farmer/FPO) of purchased items.
     3. Notifies Transporters of newly available transport jobs.
     """
-    # 1. Buyer Notification
+    # 1. Buyer Notification with Delivery Verification OTP
     if order.buyer and order.buyer.user_id:
+        otp_title = f"Order #{order.id} Placed Successfully! (Delivery OTP: {order.delivery_otp})" if order.delivery_otp else f"Order #{order.id} Placed Successfully!"
+        otp_info = f" Your Secret Delivery Verification OTP is {order.delivery_otp}. Please share this OTP with the delivery driver upon arrival to receive your produce." if order.delivery_otp else ""
         create_notification(
             db=db,
             user_id=order.buyer.user_id,
-            title=f"Order #{order.id} Placed Successfully!",
+            title=otp_title,
             message=(
-                f"Your order of {len(order.items)} item(s) (₹{order.total_amount}) has been confirmed. "
+                f"Your order of {len(order.items)} item(s) (₹{order.total_amount}) has been confirmed.{otp_info} "
                 f"Consignment is dispatched via District Central Warehouse to {order.delivery_location}."
             ),
             notification_type="ORDER",

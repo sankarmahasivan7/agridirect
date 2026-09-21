@@ -35,6 +35,12 @@ from app.models.models import (
 from app.services.transport_service import calculate_logistics_cost, find_feasible_vehicle
 from app.services.notification_service import create_notification
 from app.services.maps_service import get_batch_road_distance, get_road_distance_and_duration
+from app.services.transport_fee_calculator import (
+    calculate_transport_fee,
+    select_vehicle_type,
+    evaluate_dispatch_readiness,
+    allocate_multi_customer_route_costs,
+)
 from app.utils.geo import haversine_km
 from app.logistics.vehicle_rules import (
     BIKE_MAX_CAPACITY_KG,
@@ -50,12 +56,20 @@ WAREHOUSE_SEQUENCE = ["WH-TKS-01", "WH-TNV-01", "WH-TUT-01"]
 
 BATCH_STATUS_TRANSITIONS = {
     DeliveryBatchStatusEnum.BATCH_CREATED: {
+        DeliveryBatchStatusEnum.HOLD_FOR_CONSOLIDATION,
+        DeliveryBatchStatusEnum.TRANSPORTER_ASSIGNED,
+        DeliveryBatchStatusEnum.ACCEPTED,
+        DeliveryBatchStatusEnum.CANCELLED,
+    },
+    DeliveryBatchStatusEnum.HOLD_FOR_CONSOLIDATION: {
+        DeliveryBatchStatusEnum.BATCH_CREATED,
         DeliveryBatchStatusEnum.TRANSPORTER_ASSIGNED,
         DeliveryBatchStatusEnum.ACCEPTED,
         DeliveryBatchStatusEnum.CANCELLED,
     },
     DeliveryBatchStatusEnum.TRANSPORTER_ASSIGNED: {
         DeliveryBatchStatusEnum.ACCEPTED,
+        DeliveryBatchStatusEnum.HOLD_FOR_CONSOLIDATION,
         DeliveryBatchStatusEnum.CANCELLED,
     },
     DeliveryBatchStatusEnum.ACCEPTED: {
@@ -517,13 +531,22 @@ def _build_single_batch(db: Session, delivery_district: str, items: List[OrderFu
     # Real road route distance and cost calculation (Google Maps / OSRM)
     total_distance_km, _ = get_batch_road_distance(stops)
 
-    logistics_cost = calculate_logistics_cost(
-        weight_kg=total_cargo,
-        distance_km=total_distance_km,
-        strategy="consolidated",
+    vtype = select_vehicle_type(total_cargo)
+    fee_breakdown = calculate_transport_fee(
+        db=db,
+        road_distance_km=total_distance_km,
+        vehicle_type=vtype,
+        toll=0.0,
+        loading_unloading=None,
     )
     batch.estimated_distance_km = Decimal(str(round(total_distance_km, 2)))
-    batch.estimated_logistics_cost = logistics_cost
+    batch.estimated_logistics_cost = Decimal(str(fee_breakdown["total_fee"]))
+    batch.base_fare = Decimal(str(fee_breakdown["base_fare"]))
+    batch.distance_fare = Decimal(str(fee_breakdown["distance_fare"]))
+    batch.toll_charges = Decimal(str(fee_breakdown["toll_charges"]))
+    batch.loading_unloading_charge = Decimal(str(fee_breakdown["loading_unloading_charge"]))
+    batch.waiting_charge = Decimal(str(fee_breakdown["waiting_charge"]))
+    batch.allocated_vehicle_type = fee_breakdown["vehicle_type"]
 
     # 3PL Transporter Allocation
     first_pickup = stops[0]
@@ -538,7 +561,17 @@ def _build_single_batch(db: Session, delivery_district: str, items: List[OrderFu
     if transporter and vehicle:
         batch.assigned_transporter_id = transporter.id
         batch.assigned_vehicle_id = vehicle.id
-        batch.status = DeliveryBatchStatusEnum.TRANSPORTER_ASSIGNED
+
+        # Check vehicle fill and dispatch readiness
+        readiness = evaluate_dispatch_readiness(
+            cargo_weight_kg=total_cargo,
+            vehicle_capacity_kg=vehicle.capacity_kg,
+            vehicle_type=vehicle.vehicle_type,
+        )
+        if readiness["dispatch_status"] == "HOLD_FOR_CONSOLIDATION":
+            batch.status = DeliveryBatchStatusEnum.HOLD_FOR_CONSOLIDATION
+        else:
+            batch.status = DeliveryBatchStatusEnum.TRANSPORTER_ASSIGNED
 
         # Push notification to allocated transporter
         create_notification(
@@ -548,7 +581,7 @@ def _build_single_batch(db: Session, delivery_district: str, items: List[OrderFu
             message=(
                 f"Batch {batch.batch_code} allocated to your vehicle. "
                 f"Cargo: {batch.total_quantity_kg} kg across {total_orders_count} customer orders. "
-                f"Delivery Area: {delivery_district}. Payout: ₹{logistics_cost}."
+                f"Delivery Area: {delivery_district}. Status: {batch.status.value}. Payout: ₹{batch.estimated_logistics_cost}."
             ),
             notification_type="TRANSPORT",
             link="/transporter/dashboard",
@@ -556,9 +589,30 @@ def _build_single_batch(db: Session, delivery_district: str, items: List[OrderFu
 
     db.flush()
 
+    # Fair Multi-Customer Route Cost Allocation among shipments
+    shipment_items = []
+    for ord_obj in included_orders:
+        ord_cargo = sum(float(i.quantity) for i in items if i.order_id == ord_obj.id)
+        direct_km, _ = get_road_distance_and_duration(
+            first_pickup.latitude, first_pickup.longitude,
+            ord_obj.delivery_latitude, ord_obj.delivery_longitude,
+        )
+        shipment_items.append({
+            "order_id": ord_obj.id,
+            "weight_kg": ord_cargo,
+            "direct_road_distance_km": direct_km,
+        })
+
+    allocated_shipments = allocate_multi_customer_route_costs(
+        total_route_cost=batch.estimated_logistics_cost,
+        shipments=shipment_items,
+    )
+    alloc_map = {s["order_id"]: Decimal(str(s["allocated_fee"])) for s in allocated_shipments}
+
     # Synchronize TransportRequest records for backward-compatible views and tests
     for order in included_orders:
         order_cargo = sum(float(i.quantity) for i in items if i.order_id == order.id)
+        allocated_cost = alloc_map.get(order.id, batch.estimated_logistics_cost)
         # Check if legacy transport request exists for this order
         reqs = db.query(TransportRequest).filter(TransportRequest.order_id == order.id).all()
         if not reqs:
@@ -581,12 +635,13 @@ def _build_single_batch(db: Session, delivery_district: str, items: List[OrderFu
                 logistics_strategy="consolidated",
                 hub_name=first_pickup.location_name,
                 distance_km=batch.estimated_distance_km,
-                logistics_cost=batch.estimated_logistics_cost,
+                logistics_cost=allocated_cost,
             )
             db.add(req)
         else:
             for r in reqs:
                 r.batch_id = batch.id
+                r.logistics_cost = allocated_cost
                 if vehicle and r.assigned_vehicle_id is None:
                     r.assigned_vehicle_id = vehicle.id
                     r.vehicle_capacity_kg = vehicle.capacity_kg
@@ -608,7 +663,7 @@ def accept_delivery_batch(db: Session, batch_id: int, transporter: TransporterPr
             joinedload(DeliveryBatch.fulfillment_items),
         )
         .filter(DeliveryBatch.id == batch_id)
-        .with_for_update()
+        .with_for_update(of=DeliveryBatch)
         .first()
     )
 
@@ -676,6 +731,7 @@ def update_batch_status(
     transporter: Optional[TransporterProfile] = None,
     is_admin: bool = False,
     force: bool = False,
+    otp: Optional[str] = None,
 ) -> DeliveryBatch:
     """
     Executes controlled status transitions across the 8-stage lifecycle:
@@ -691,7 +747,7 @@ def update_batch_status(
             joinedload(DeliveryBatch.fulfillment_items),
         )
         .filter(DeliveryBatch.id == batch_id)
-        .with_for_update()
+        .with_for_update(of=DeliveryBatch)
         .first()
     )
 
@@ -735,6 +791,20 @@ def update_batch_status(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Cannot mark delivered yet -- transit in progress. Earliest delivery time is {earliest_delivery.strftime('%Y-%m-%d %H:%M UTC')}.",
                 )
+
+        # Delivery OTP Verification for all customer orders in the batch
+        order_ids_check = {item.order_id for item in batch.fulfillment_items}
+        submitted_otps = set(part.strip() for part in (otp or "").replace(",", " ").split()) if otp else set()
+
+        orders_in_batch = db.query(Order).options(joinedload(Order.buyer)).filter(Order.id.in_(order_ids_check)).all()
+        for ord_item in orders_in_batch:
+            if ord_item.delivery_otp and not is_admin and not force:
+                if submitted_otps and ord_item.delivery_otp.strip() not in submitted_otps:
+                    buyer_name = ord_item.buyer.full_name if ord_item.buyer and ord_item.buyer.full_name else f"Buyer #{ord_item.buyer_id}"
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid Delivery Verification OTP for Order #{ord_item.id} ({buyer_name}). Please enter the buyer's 6-digit OTP to confirm delivery.",
+                    )
 
     batch.status = new_status
     linked_reqs = db.query(TransportRequest).filter(TransportRequest.batch_id == batch.id).all()
@@ -789,11 +859,12 @@ def update_batch_status(
         for oid in order_ids:
             order = db.query(Order).filter(Order.id == oid).first()
             if order and order.buyer:
+                otp_txt = f" Your Delivery OTP is {order.delivery_otp}. Share this with the delivery driver upon arrival." if order.delivery_otp else ""
                 create_notification(
                     db=db,
                     user_id=order.buyer.user_id,
-                    title=f"Order #{order.id} Out For Delivery",
-                    message=f"Your delivery is arriving today from batch {batch.batch_code}.",
+                    title=f"Order #{order.id} Out For Delivery - OTP: {order.delivery_otp}" if order.delivery_otp else f"Order #{order.id} Out For Delivery",
+                    message=f"Your delivery is arriving today from batch {batch.batch_code}.{otp_txt}",
                     notification_type="DELIVERY",
                     link="/buyer/orders",
                 )

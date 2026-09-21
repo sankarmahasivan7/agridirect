@@ -54,6 +54,7 @@ class PaymentStatusEnum(str, enum.Enum):
     PAID = "PAID"
     FAILED = "FAILED"
     REFUNDED = "REFUNDED"
+    CANCELLED = "CANCELLED"
 
 
 class User(Base):
@@ -280,6 +281,16 @@ class Order(Base):
     delivery_latitude = Column(Numeric(9, 6), nullable=True)
     delivery_longitude = Column(Numeric(9, 6), nullable=True)
     status = Column(SAEnum(OrderStatusEnum), default=OrderStatusEnum.PENDING, nullable=False)
+    delivery_otp = Column(String(6), nullable=True)
+
+    # Transport Fee Breakdown
+    base_fare = Column(Numeric(10, 2), nullable=True)
+    distance_fare = Column(Numeric(10, 2), nullable=True)
+    toll_charges = Column(Numeric(10, 2), nullable=True, default=0)
+    loading_unloading_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    waiting_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    road_distance_km = Column(Numeric(10, 2), nullable=True)
+    allocated_vehicle_type = Column(String(50), nullable=True)
 
     # Payment & Settlement
     payment_method = Column(SAEnum(PaymentMethodEnum), nullable=True)
@@ -453,6 +464,7 @@ class Vehicle(Base):
 
 class DeliveryBatchStatusEnum(str, enum.Enum):
     BATCH_CREATED = "BATCH_CREATED"
+    HOLD_FOR_CONSOLIDATION = "HOLD_FOR_CONSOLIDATION"
     TRANSPORTER_ASSIGNED = "TRANSPORTER_ASSIGNED"
     ACCEPTED = "ACCEPTED"
     READY_FOR_PICKUP = "READY_FOR_PICKUP"
@@ -479,6 +491,14 @@ class DeliveryBatch(Base):
     required_vehicle_capacity_kg = Column(Numeric(12, 2), nullable=False, default=0)
     estimated_distance_km = Column(Numeric(10, 2), default=0)
     estimated_logistics_cost = Column(Numeric(12, 2), default=0)
+
+    # Transport Fee Breakdown
+    base_fare = Column(Numeric(10, 2), nullable=True)
+    distance_fare = Column(Numeric(10, 2), nullable=True)
+    toll_charges = Column(Numeric(10, 2), nullable=True, default=0)
+    loading_unloading_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    waiting_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    allocated_vehicle_type = Column(String(50), nullable=True)
 
     status = Column(SAEnum(DeliveryBatchStatusEnum), default=DeliveryBatchStatusEnum.BATCH_CREATED, nullable=False)
     assigned_transporter_id = Column(Integer, ForeignKey("transporter_profiles.id"), nullable=True)
@@ -643,6 +663,15 @@ class TransportRequest(Base):
     logistics_cost = Column(Numeric(10, 2), nullable=True)
     vehicle_capacity_kg = Column(Numeric(10, 2), nullable=True)
 
+    # Transport Fee Breakdown
+    base_fare = Column(Numeric(10, 2), nullable=True)
+    distance_fare = Column(Numeric(10, 2), nullable=True)
+    toll_charges = Column(Numeric(10, 2), nullable=True, default=0)
+    loading_unloading_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    waiting_charge = Column(Numeric(10, 2), nullable=True, default=0)
+    road_distance_km = Column(Numeric(10, 2), nullable=True)
+    allocated_vehicle_type = Column(String(50), nullable=True)
+
     # Perishability & Priority Fields
     is_perishable = Column(Boolean, default=False)
     perishability_urgency = Column(String(30), default="NORMAL")  # CRITICAL, URGENT, SELL_SOON, NORMAL
@@ -788,4 +817,37 @@ class Review(Base):
     farmer = relationship("FarmerProfile", back_populates="reviews")
     listing = relationship("ProductListing", back_populates="reviews")
     product = relationship("Product", back_populates="reviews")
+
+
+class VehicleRate(Base):
+    """
+    Database-driven vehicle pricing rates.
+    Admin can configure base fares, per-km rates, minimum fares, and accessorial fees.
+    """
+    __tablename__ = "vehicle_rates"
+
+    id = Column(Integer, primary_key=True)
+    vehicle_type = Column(String(50), unique=True, nullable=False)  # BIKE, MINI_TRUCK, TRUCK
+    base_fare = Column(Numeric(10, 2), nullable=False)
+    rate_per_km = Column(Numeric(10, 2), nullable=False)
+    minimum_fare = Column(Numeric(10, 2), nullable=False)
+    loading_unloading_charge = Column(Numeric(10, 2), nullable=False, default=0.0)
+    waiting_charge_per_hour = Column(Numeric(10, 2), nullable=False, default=0.0)
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LogisticsSetting(Base):
+    """
+    Key-value logistics configurations (e.g. truck minimum fill ratio, bike max weight).
+    """
+    __tablename__ = "logistics_settings"
+
+    id = Column(Integer, primary_key=True)
+    setting_key = Column(String(100), unique=True, nullable=False)
+    setting_value = Column(String(255), nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 

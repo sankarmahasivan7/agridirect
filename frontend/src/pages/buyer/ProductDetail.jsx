@@ -32,7 +32,7 @@ export default function ProductDetail() {
   const navigate = useNavigate()
   const { addItem } = useCart()
   const { addToast } = useToast()
-  const { t } = useLanguage()
+  const { t, isTamil } = useLanguage()
 
   const [listing, setListing] = useState(null)
   const [forecast, setForecast] = useState(null)
@@ -346,10 +346,10 @@ export default function ProductDetail() {
               <div className="flex items-center gap-2">
                 <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
                 <h3 className="font-extrabold text-slate-900 text-base">
-                  Customer Reviews & Produce Photos
+                  {isTamil ? 'வாடிக்கையாளர் மதிப்பாய்வுகள் & புகைப்படங்கள்' : 'Customer Reviews & Produce Photos'}
                 </h3>
               </div>
-              <span className="badge-actual text-xs">Verified Purchases</span>
+              <span className="badge-actual text-xs">{isTamil ? 'சரிபார்க்கப்பட்ட கொள்முதல்' : 'Verified Purchases'}</span>
             </div>
 
             {reviewsData && reviewsData.total_reviews > 0 ? (
@@ -374,7 +374,11 @@ export default function ProductDetail() {
                       ))}
                     </div>
                     <p className="text-xs text-slate-500 font-medium">
-                      Based on <b>{reviewsData.total_reviews} verified customer review{reviewsData.total_reviews > 1 ? 's' : ''}</b>
+                      {isTamil ? (
+                        <><b>{reviewsData.total_reviews} சரிபார்க்கப்பட்ட வாடிக்கையாளர்</b> மதிப்பாய்வுகளின் அடிப்படையில்</>
+                      ) : (
+                        <>Based on <b>{reviewsData.total_reviews} verified customer review{reviewsData.total_reviews > 1 ? 's' : ''}</b></>
+                      )}
                     </p>
                   </div>
 
@@ -401,7 +405,7 @@ export default function ProductDetail() {
                     <div className="flex items-center gap-1.5 mb-2.5">
                       <Camera className="w-4 h-4 text-emerald-600" />
                       <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Customer Inspection Photos ({reviewsData.reviews.filter((r) => r.image_url).length})
+                        {isTamil ? 'வாடிக்கையாளர் தர புகைப்படங்கள்' : 'Customer Inspection Photos'} ({reviewsData.reviews.filter((r) => r.image_url).length})
                       </h4>
                     </div>
                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -428,7 +432,7 @@ export default function ProductDetail() {
                 {/* Customer Reviews Feed */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Recent Buyer Feedback
+                    {isTamil ? 'சமீபத்திய வாங்குபவர் கருத்துகள்' : 'Recent Buyer Feedback'}
                   </h4>
                   <div className="divide-y divide-slate-100 space-y-4">
                     {reviewsData.reviews.map((rev) => {
@@ -446,7 +450,7 @@ export default function ProductDetail() {
                                 <p className="text-xs font-bold text-slate-900 flex items-center gap-1">
                                   {rev.buyer_name}
                                   <span className="text-[10px] font-normal text-emerald-600 flex items-center gap-0.5">
-                                    <CheckCircle2 className="w-3 h-3" /> Verified Buyer
+                                    <CheckCircle2 className="w-3 h-3" /> {isTamil ? 'சரிபார்க்கப்பட்ட வாங்குபவர்' : 'Verified Buyer'}
                                   </span>
                                 </p>
                                 <p className="text-[10px] text-slate-400">
@@ -479,7 +483,7 @@ export default function ProductDetail() {
                               >
                                 <img src={photoUrl} alt="Customer produce photo" className="w-32 h-24 object-cover group-hover:scale-105 transition" />
                                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
-                                  <Eye className="w-3.5 h-3.5" /> Inspect
+                                  <Eye className="w-3.5 h-3.5" /> {isTamil ? 'பார்வையிடு' : 'Inspect'}
                                 </div>
                               </button>
                             </div>
@@ -493,9 +497,13 @@ export default function ProductDetail() {
             ) : (
               <div className="text-center py-8 px-4 bg-slate-50/60 rounded-2xl border border-slate-100">
                 <Star className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-60" />
-                <h4 className="text-sm font-bold text-slate-800">No Customer Reviews Yet</h4>
+                <h4 className="text-sm font-bold text-slate-800">
+                  {isTamil ? 'வாடிக்கையாளர் மதிப்பாய்வுகள் எதுவும் இல்லை' : 'No Customer Reviews Yet'}
+                </h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Be the first to order this fresh produce batch and share your feedback and photos with the community!
+                  {isTamil 
+                    ? 'இந்த புதிய விளைபொருளை முதலில் ஆர்டர் செய்து உங்கள் கருத்து மற்றும் புகைப்படங்களை பகிருங்கள்!' 
+                    : 'Be the first to order this fresh produce batch and share your feedback and photos with the community!'}
                 </p>
               </div>
             )}
@@ -584,7 +592,7 @@ export default function ProductDetail() {
                 ) : (
                   <>
                     <ShoppingCart className="w-4 h-4 text-amber-800" />
-                    <span>{isFutureAvailable ? `Pre-order (${quantity} ${listing.unit})` : 'Add to Cart'}</span>
+                    <span>{isFutureAvailable ? (isTamil ? `முன்பதிவு (${quantity} ${listing.unit})` : `Pre-order (${quantity} ${listing.unit})`) : (isTamil ? 'கூடையில் சேர்' : 'Add to Cart')}</span>
                   </>
                 )}
               </button>
@@ -594,7 +602,7 @@ export default function ProductDetail() {
                 disabled={quantity <= 0 || quantity > availableQty}
                 className="w-full py-3.5 px-4 rounded-xl font-black text-sm bg-[#ffa41c] hover:bg-[#fa8900] text-slate-950 shadow-sm transition-all flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 cursor-pointer"
               >
-                <span>{isFutureAvailable ? `⚡ Pre-order Now (Available ${shortAvailDate})` : '⚡ Buy Now'}</span>
+                <span>{isFutureAvailable ? (isTamil ? `⚡ இப்போதே முன்பதிவு செய்க (${shortAvailDate})` : `⚡ Pre-order Now (Available ${shortAvailDate})`) : (isTamil ? '⚡ இப்போதே வாங்கு' : '⚡ Buy Now')}</span>
               </button>
             </div>
 
@@ -608,20 +616,22 @@ export default function ProductDetail() {
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-[11px] text-slate-500">
                 <p className="flex items-center gap-1.5 font-semibold text-amber-800">
                   <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  Produce available from {formattedAvailDate}
+                  {isTamil ? `விளைபொருள் கிடைக்கும் நாள்: ${formattedAvailDate}` : `Produce available from ${formattedAvailDate}`}
                 </p>
                 <p className="text-slate-500">
-                  Farmer deposits produce at District Central Warehouse on availability date. Transporter pickup unlocks immediately thereafter.
+                  {isTamil 
+                    ? 'விவசாயி மாவட்ட மத்திய கிடங்கில் விளைபொருளை ஒப்படைத்ததும் போக்குவரத்து உடனடியாக தொடங்கும்.' 
+                    : 'Farmer deposits produce at District Central Warehouse on availability date. Transporter pickup unlocks immediately thereafter.'}
                 </p>
               </div>
             ) : (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-[11px] text-slate-500">
                 <p className="flex items-center gap-1.5 font-semibold text-slate-700">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Dispatched via District Central Warehouse Hub
+                  {isTamil ? 'மாவட்ட மத்திய கிடங்கு மையம் வழியாக விநியோகிக்கப்படுகிறது' : 'Dispatched via District Central Warehouse Hub'}
                 </p>
                 <p className="text-slate-400">
-                  Logistics network exclusively supports Tenkasi, Tirunelveli, and Thoothukudi.
+                  {isTamil ? 'போக்குவரத்து வலையமைப்பு தென்காசி, திருநெல்வேலி மற்றும் தூத்துக்குடிக்கு மட்டுமே பொருந்தும்.' : 'Logistics network exclusively supports Tenkasi, Tirunelveli, and Thoothukudi.'}
                 </p>
               </div>
             )}

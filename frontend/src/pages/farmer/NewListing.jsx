@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useParams, Link } from 'react-router-dom'
-import { createListing, updateListing, listingDetail } from '../../services/api.js'
+import { createListing, updateListing, listingDetail, getLiveMandiPrices } from '../../services/api.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { useToast } from '../../components/Toast.jsx'
 import { useLanguage } from '../../context/LanguageContext.jsx'
-import { findMarketPrice, POPULAR_CROPS } from '../../data/marketPrices.js'
+import { findMarketPrice, POPULAR_CROPS, calculateDirectTradePrice } from '../../data/marketPrices.js'
 import { 
   ArrowLeft, 
   Package, 
@@ -14,15 +15,15 @@ import {
   MapPin, 
   ShieldCheck, 
   Loader2, 
-  AlertCircle,
-  Clock,
-  Sparkles,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  CheckCircle2,
-  ExternalLink,
-  Zap
+  AlertCircle, 
+  Clock, 
+  Sparkles, 
+  TrendingUp, 
+  TrendingDown, 
+  Minus, 
+  CheckCircle2, 
+  ExternalLink, 
+  Zap 
 } from 'lucide-react'
 
 const CATEGORIES = [
@@ -43,9 +44,12 @@ export default function NewListing() {
   const [searchParams] = useSearchParams()
   const { id } = useParams()
   const isEditing = Boolean(id)
+  const { user } = useAuth()
+  const farmerDistrict = user?.district || 'Tenkasi'
   const { addToast } = useToast()
   const { t, language } = useLanguage()
   const isTa = language === 'ta'
+  const mandiReqTimerRef = useRef(null)
 
   const [form, setForm] = useState({
     product_name: '', 
@@ -118,12 +122,58 @@ export default function NewListing() {
     }
   }, [searchParams, isEditing])
 
+  // Query live mandi prices for farmer's registered district (e.g. Tenkasi)
+  const fetchLiveDistrictMandi = (cropName) => {
+    if (!cropName) return
+    getLiveMandiPrices({ district: farmerDistrict, commodity: cropName })
+      .then((res) => {
+        const recs = res.data?.records || []
+        if (recs.length > 0) {
+          // Prioritize farmer's exact registered district (e.g. Tenkasi)
+          const distMatch = recs.find(r => (r.district || '').toLowerCase().includes(farmerDistrict.toLowerCase())) || recs[0]
+          const mPrice = Number(distMatch.modal_price_per_kg) || 35.0
+          const minP = Number(distMatch.min_price_per_kg) || (mPrice - 5)
+          const maxP = Number(distMatch.max_price_per_kg) || (mPrice + 5)
+          const bonus = distMatch.farmer_margin_bonus || (mPrice <= 25 ? 3.0 : (mPrice <= 40 ? 4.0 : (mPrice <= 60 ? 5.0 : 6.0)))
+          const recDirectPrice = distMatch.direct_trade_price || Number((mPrice + bonus).toFixed(2))
+
+          setDetectedCrop((prev) => ({
+            ...(prev || {}),
+            modalPrice: mPrice,
+            minPrice: minP,
+            maxPrice: maxP,
+            directTradePrice: recDirectPrice,
+            farmerMarginBonus: bonus,
+            primaryMandi: `${distMatch.market}, ${distMatch.district}`,
+            primaryMandiTa: `${distMatch.market}, ${distMatch.district}`,
+            district: distMatch.district,
+            isLiveMandi: true,
+          }))
+
+          // Auto-fill price with the direct-from-farm fair price (+3 to +6)
+          setForm((prev) => ({
+            ...prev,
+            price_per_unit: recDirectPrice.toFixed(2),
+          }))
+          setActivePricePreset('directTrade')
+        }
+      })
+      .catch(() => {})
+  }
+
   // Applies crop match and auto-populates price, category, unit, etc.
   const applyCropMatch = (name, overridePrice = null, overrideCat = null, overrideUnit = null) => {
     const matched = findMarketPrice(name)
     if (matched) {
-      setDetectedCrop(matched)
-      const targetPrice = overridePrice !== null ? overridePrice : matched.modalPrice
+      const fairInfo = calculateDirectTradePrice(matched.modalPrice)
+      const defaultDirect = matched.directTradePrice || fairInfo.recommendedPrice
+      const targetPrice = overridePrice !== null ? overridePrice : defaultDirect
+
+      setDetectedCrop({
+        ...matched,
+        directTradePrice: defaultDirect,
+        farmerMarginBonus: matched.farmerMarginBonus || fairInfo.marginBonus,
+      })
       setForm((prev) => ({
         ...prev,
         product_name: name,
@@ -133,7 +183,8 @@ export default function NewListing() {
         shelf_life_days: matched.shelfLifeDays ? String(matched.shelfLifeDays) : prev.shelf_life_days,
         is_perishable: matched.isPerishable !== undefined ? matched.isPerishable : prev.is_perishable,
       }))
-      setActivePricePreset('average')
+      setActivePricePreset('directTrade')
+      fetchLiveDistrictMandi(name)
     } else {
       setDetectedCrop(null)
       setForm((prev) => ({ ...prev, product_name: name }))
@@ -145,18 +196,28 @@ export default function NewListing() {
     const val = e.target.value
     const matched = findMarketPrice(val)
     if (matched) {
-      setDetectedCrop(matched)
-      // Auto-populate price and category if matched
+      const fairInfo = calculateDirectTradePrice(matched.modalPrice)
+      const defaultDirect = matched.directTradePrice || fairInfo.recommendedPrice
+      setDetectedCrop({
+        ...matched,
+        directTradePrice: defaultDirect,
+        farmerMarginBonus: matched.farmerMarginBonus || fairInfo.marginBonus,
+      })
       setForm((prev) => ({
         ...prev,
         product_name: val,
         category_name: matched.category,
         unit: matched.unit,
-        price_per_unit: matched.modalPrice.toFixed(2),
+        price_per_unit: defaultDirect.toFixed(2),
         shelf_life_days: matched.shelfLifeDays ? String(matched.shelfLifeDays) : prev.shelf_life_days,
         is_perishable: matched.isPerishable !== undefined ? matched.isPerishable : prev.is_perishable,
       }))
-      setActivePricePreset('average')
+      setActivePricePreset('directTrade')
+
+      if (mandiReqTimerRef.current) clearTimeout(mandiReqTimerRef.current)
+      mandiReqTimerRef.current = setTimeout(() => {
+        fetchLiveDistrictMandi(val)
+      }, 350)
     } else {
       setDetectedCrop(null)
       setForm((prev) => ({ ...prev, product_name: val }))
@@ -168,15 +229,22 @@ export default function NewListing() {
     applyCropMatch(crop.name)
   }
 
-  // Handle Price Presets (Market Average, Premium Grade A, Fast Sale)
+  // Handle Price Presets (Direct Trade Fair, Mandi Wholesale, Premium Grade A, Bulk)
   const applyPricePreset = (preset) => {
     if (!detectedCrop) return
     setActivePricePreset(preset)
-    let newPrice = detectedCrop.modalPrice
-    if (preset === 'premium') {
-      newPrice = Number((detectedCrop.modalPrice * 1.15).toFixed(2)) // +15%
+    const baseModal = detectedCrop.modalPrice || 35.0
+    const bonus = detectedCrop.farmerMarginBonus || 4.0
+    let newPrice = detectedCrop.directTradePrice || (baseModal + bonus)
+    
+    if (preset === 'directTrade') {
+      newPrice = detectedCrop.directTradePrice || (baseModal + bonus)
+    } else if (preset === 'mandi') {
+      newPrice = baseModal
+    } else if (preset === 'premium') {
+      newPrice = Number((baseModal + bonus + 2.0).toFixed(2)) // +₹6 over mandi
     } else if (preset === 'bulk') {
-      newPrice = Number((detectedCrop.modalPrice * 0.90).toFixed(2)) // -10%
+      newPrice = Number((baseModal - 2.0).toFixed(2))
     }
     setForm((prev) => ({ ...prev, price_per_unit: newPrice.toFixed(2) }))
   }
@@ -437,46 +505,80 @@ export default function NewListing() {
             {detectedCrop && (
               <div className="p-4 sm:p-5 bg-gradient-to-br from-emerald-50/90 to-leaf-50/50 rounded-2xl border border-emerald-200/80 mb-4 shadow-2xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{detectedCrop.icon}</span>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">{detectedCrop.icon}</span>
                     <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">
-                        {isTa ? detectedCrop.nameTa : detectedCrop.name} — {t('newListing.mandiBenchmark', 'Mandi Benchmark')}: ₹{detectedCrop.modalPrice.toFixed(2)}/{detectedCrop.unit}
-                      </h4>
-                      <p className="text-[11px] text-slate-500">
-                        {isTa ? detectedCrop.primaryMandiTa : detectedCrop.primaryMandi} · Band: ₹{detectedCrop.minPrice} – ₹{detectedCrop.maxPrice}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
+                          {isTa ? detectedCrop.nameTa : detectedCrop.name} — {farmerDistrict} {isTa ? 'சந்தை விலை' : 'Market Benchmark'}: ₹{detectedCrop.modalPrice.toFixed(2)}/{detectedCrop.unit}
+                        </h4>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          {isTa ? `+₹${detectedCrop.farmerMarginBonus || 4} நேரடி கூடுதல் லாபம்` : `+₹${detectedCrop.farmerMarginBonus || 4}/kg Farmer Bonus`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        📍 {detectedCrop.primaryMandi || `${farmerDistrict} Uzhavar Sandhai`} · {isTa ? 'சந்தை வரம்பு' : 'Daily Band'}: ₹{detectedCrop.minPrice} – ₹{detectedCrop.maxPrice}/{detectedCrop.unit}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
                       detectedCrop.trend === 'up' ? 'bg-emerald-100 text-emerald-800' : detectedCrop.trend === 'down' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-800'
                     }`}>
                       {detectedCrop.trend === 'up' && <TrendingUp className="w-3 h-3" />}
                       {detectedCrop.trend === 'down' && <TrendingDown className="w-3 h-3" />}
                       {detectedCrop.trend === 'stable' && <Minus className="w-3 h-3" />}
-                      {detectedCrop.trendPercent}
+                      {detectedCrop.trendPercent || '+2.5%'}
                     </span>
                   </div>
                 </div>
 
+                {/* Direct-Trade Intermediary Elimination Card */}
+                <div className="p-3.5 bg-white/90 rounded-xl border border-emerald-200/90 mb-3 text-xs text-slate-700 space-y-1 shadow-2xs">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>
+                      {isTa ? 'இடைத்தரகர் இல்லாத நேரடி லாப விலை அமைப்பு' : 'Direct-From-Farm Fair Pricing (Zero Intermediaries)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    {isTa
+                      ? `${farmerDistrict} சந்தையில் இடைத்தரகர்கள் விவசாயிகளிடம் ₹${detectedCrop.modalPrice.toFixed(2)} விலைக்கு வாங்கி நுகர்வோரிடம் அதிக லாபத்திற்கு விற்கின்றனர். அக்ரிடைரக்ட்டில் இடைத்தரகர் இல்லாததால் உங்களுக்கு ஒரு கிலோவிற்கு +₹${detectedCrop.farmerMarginBonus || 4}.00 கூடுதல் லாபம் (₹${(detectedCrop.directTradePrice || (detectedCrop.modalPrice + 4)).toFixed(2)}) நேரடியாக கிடைக்கிறது!`
+                      : `In traditional markets, middlemen buy at the local mandi rate (₹${detectedCrop.modalPrice.toFixed(2)}/kg) and markup heavily to buyers. On AgriDirect, by bypassing intermediaries, you earn +₹${detectedCrop.farmerMarginBonus || 4}.00/kg extra profit (₹${(detectedCrop.directTradePrice || (detectedCrop.modalPrice + 4)).toFixed(2)}/kg), while buyers still pay less than retail!`
+                    }
+                  </p>
+                </div>
+
                 {/* 1-Click Price Adjustment Presets */}
                 <div className="pt-2 border-t border-emerald-200/60 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-semibold text-slate-600 mr-1">
-                    Price Presets:
+                  <span className="text-[11px] font-bold text-slate-600 mr-1">
+                    {isTa ? 'பரிந்துரைக்கப்பட்ட விலைகள்:' : 'Price Presets:'}
                   </span>
                   
                   <button
                     type="button"
-                    onClick={() => applyPricePreset('average')}
+                    onClick={() => applyPricePreset('directTrade')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      activePricePreset === 'directTrade'
+                        ? 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-400/40'
+                        : 'bg-white text-emerald-900 hover:bg-emerald-100/70 border border-emerald-300'
+                    }`}
+                  >
+                    ⭐ {isTa ? `நேரடி உழவர் விலை (+₹${detectedCrop.farmerMarginBonus || 4})` : `Direct-Trade Fair (+₹${detectedCrop.farmerMarginBonus || 4})`}: ₹{(detectedCrop.directTradePrice || (detectedCrop.modalPrice + 4)).toFixed(2)}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => applyPricePreset('mandi')}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                      activePricePreset === 'average'
+                      activePricePreset === 'mandi'
                         ? 'bg-emerald-700 text-white shadow-xs'
                         : 'bg-white text-slate-700 hover:bg-emerald-100/70 border border-emerald-200'
                     }`}
                   >
-                    {t('newListing.useMarketAverage', 'Market Average')}: ₹{detectedCrop.modalPrice.toFixed(2)}
+                    {isTa ? `${farmerDistrict} சந்தை விலை` : `${farmerDistrict} Mandi Base`}: ₹{detectedCrop.modalPrice.toFixed(2)}
                   </button>
 
                   <button
@@ -488,7 +590,7 @@ export default function NewListing() {
                         : 'bg-white text-slate-700 hover:bg-emerald-100/70 border border-emerald-200'
                     }`}
                   >
-                    {t('newListing.premiumGrade', 'Premium Grade A (+15%)')}: ₹{(detectedCrop.modalPrice * 1.15).toFixed(2)}
+                    {isTa ? 'முதல் தரம் (+₹6)' : 'Premium Grade A (+₹6)'}: ₹{(detectedCrop.modalPrice + 6.0).toFixed(2)}
                   </button>
 
                   <button
@@ -500,7 +602,7 @@ export default function NewListing() {
                         : 'bg-white text-slate-700 hover:bg-emerald-100/70 border border-emerald-200'
                     }`}
                   >
-                    {t('newListing.fastSale', 'Fast Bulk Sale (-10%)')}: ₹{(detectedCrop.modalPrice * 0.90).toFixed(2)}
+                    {isTa ? 'விரைவு விற்பனை (-₹2)' : 'Fast Bulk (-₹2)'}: ₹{(detectedCrop.modalPrice - 2.0).toFixed(2)}
                   </button>
                 </div>
               </div>

@@ -118,14 +118,16 @@ export const MARKET_PRICES = [
     categoryTa: 'காய்கறிகள்',
     unit: 'kg',
     unitTa: 'கிலோ',
-    modalPrice: 24.00,
-    minPrice: 20.00,
-    maxPrice: 28.00,
-    trend: 'down',
-    trendPercent: '-3.5%',
-    primaryMandi: 'Nainarkoil APMC, Ramanathapuram',
-    primaryMandiTa: 'நயினார்கோவில் சந்தை, ராமநாதபுரம்',
-    arrivals: '190 Quintals/day',
+    modalPrice: 35.00,
+    minPrice: 30.00,
+    maxPrice: 38.00,
+    directTradePrice: 39.00,
+    farmerMarginBonus: 4.00,
+    trend: 'stable',
+    trendPercent: '+2.5%',
+    primaryMandi: 'Tenkasi Uzhavar Sandhai, Tenkasi',
+    primaryMandiTa: 'தென்காசி உழவர் சந்தை, தென்காசி',
+    arrivals: '210 Quintals/day',
     shelfLifeDays: 6,
     isPerishable: true,
     aliases: ['brinjal', 'eggplant', 'aubergine', 'baingan', 'kathirikai', 'கத்தரிக்காய்', 'green brinjal', 'purple brinjal'],
@@ -467,12 +469,40 @@ export const POPULAR_CROPS = [
 
 export const MANDI_LOCATIONS = [
   'All Mandis',
+  'Tenkasi Uzhavar Sandhai',
+  'Sankarankoil Regulated Market',
+  'Melapalayam Uzhavar Sandhai, Tirunelveli',
+  'Kovilpatti Regulated Market, Thoothukudi',
   'Koyambedu Wholesale Market, Chennai',
   'Central Market, Madurai',
   'MGR Wholesale Market, Coimbatore',
-  'Uzhavar Sandhai, Salem',
-  'Gandhi Market, Trichy',
-  'Uzhavar Sandhai, Tirunelveli',
-  'Dharmapuri Fruit Mandi',
-  'Thanjavur Grain Regulated Market'
+  'Gandhi Market, Trichy'
 ]
+
+/**
+ * Calculates fair direct-trade farmer price bonus (+₹3 to +₹6/kg)
+ * Eliminates intermediary/middleman markups to give farmers maximum profit.
+ */
+export function calculateDirectTradePrice(mandiPrice) {
+  const p = Number(mandiPrice) || 0
+  if (p <= 0) return { recommendedPrice: 0, marginBonus: 4, marketPrice: 0, buyerSavingsEstimate: 0 }
+  
+  let marginBonus = 4.00
+  if (p <= 25) {
+    marginBonus = 3.00
+  } else if (p <= 40) {
+    marginBonus = 4.00
+  } else if (p <= 60) {
+    marginBonus = 5.00
+  } else {
+    marginBonus = 6.00
+  }
+
+  const recommendedPrice = Number((p + marginBonus).toFixed(2))
+  return {
+    marketPrice: p,
+    marginBonus,
+    recommendedPrice,
+    buyerSavingsEstimate: Number((marginBonus * 2.5).toFixed(2)),
+  }
+}

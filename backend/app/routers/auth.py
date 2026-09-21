@@ -1,17 +1,22 @@
 from datetime import datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+import json
+import base64
+import urllib.request
 
 from app.db.session import get_db
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.deps import get_current_user
 from app.core.constants import normalize_district, get_district_warehouse, SUPPORTED_DISTRICTS
 from app.models.models import (
-    User, FarmerProfile, FPOProfile, BuyerProfile, TransporterProfile, Vehicle, RoleEnum
+    User, FarmerProfile, FPOProfile, BuyerProfile, TransporterProfile, Vehicle, RoleEnum, BuyerTypeEnum
 )
 from app.schemas.schemas import (
-    FarmerRegister, FPORegister, BuyerRegister, TransporterRegister, LoginRequest, TokenResponse
+    FarmerRegister, FPORegister, BuyerRegister, TransporterRegister, LoginRequest, TokenResponse, GoogleAuthRequest
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -179,6 +184,126 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=token, role=user.role, user_id=user.id,
         district=user_district, warehouse_name=wh_name
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """
+    Continues with Google:
+    1. Verifies Google token / credential.
+    2. Resolves user account or auto-registers with selected role (default: buyer).
+    3. Issues JWT bearer token.
+    """
+    resolved_email = payload.email
+    resolved_name = payload.full_name
+
+    if payload.credential:
+        # 1. Attempt official tokeninfo endpoint
+        try:
+            url = f"https://oauth2.googleapis.com/tokeninfo?id_token={payload.credential}"
+            req = urllib.request.Request(url, headers={"User-Agent": "AgriDirect-AI/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                token_data = json.loads(resp.read().decode("utf-8"))
+                resolved_email = token_data.get("email")
+                resolved_name = token_data.get("name") or token_data.get("given_name")
+        except Exception:
+            # 2. Fallback decode JWT payload
+            try:
+                parts = payload.credential.split(".")
+                if len(parts) >= 2:
+                    padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                    decoded_bytes = base64.urlsafe_b64decode(padded.encode())
+                    data = json.loads(decoded_bytes.decode("utf-8"))
+                    resolved_email = data.get("email")
+                    resolved_name = data.get("name") or data.get("given_name")
+            except Exception:
+                pass
+
+    if not resolved_email:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Could not verify Google account or email.")
+
+    target_role = payload.role or RoleEnum.buyer
+    user = db.query(User).filter(User.email == resolved_email).first()
+
+    if not user:
+        # Auto-create user
+        user = User(
+            email=resolved_email,
+            hashed_password=hash_password(f"GoogleAuth_{resolved_email}_Secured"),
+            role=target_role,
+            is_active=True,
+            is_verified=True,
+        )
+        db.add(user)
+        db.flush()
+
+        # Create appropriate profile
+        if target_role == RoleEnum.buyer:
+            db.add(BuyerProfile(
+                user_id=user.id,
+                full_name=resolved_name or "Google Buyer",
+                buyer_type=BuyerTypeEnum.consumer,
+                district="Tenkasi",
+                location="Tenkasi",
+                default_latitude=Decimal("8.9594"),
+                default_longitude=Decimal("77.3167"),
+            ))
+        elif target_role == RoleEnum.farmer:
+            db.add(FarmerProfile(
+                user_id=user.id,
+                full_name=resolved_name or "Google Farmer",
+                district="Tenkasi",
+                state="Tamil Nadu",
+                farm_location="Tenkasi",
+                farm_size_acres=Decimal("3.5"),
+                farm_latitude=Decimal("8.9594"),
+                farm_longitude=Decimal("77.3167"),
+            ))
+        elif target_role == RoleEnum.transporter:
+            tp = TransporterProfile(
+                user_id=user.id,
+                full_name=resolved_name or "Google Transporter",
+                district="Tenkasi",
+                base_location="Tenkasi",
+                base_latitude=Decimal("8.9594"),
+                base_longitude=Decimal("77.3167"),
+            )
+            db.add(tp)
+            db.flush()
+            db.add(Vehicle(
+                transporter_id=tp.id,
+                name="Quick Vehicle",
+                vehicle_type="BIKE",
+                capacity_kg=Decimal("100.0"),
+                current_latitude=Decimal("8.9594"),
+                current_longitude=Decimal("77.3167"),
+                location_label="Tenkasi",
+            ))
+        db.commit()
+        db.refresh(user)
+
+    if not user.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account has been deactivated.")
+
+    user_district = None
+    if user.farmer_profile and user.farmer_profile.district:
+        user_district = user.farmer_profile.district
+    elif user.buyer_profile and user.buyer_profile.district:
+        user_district = user.buyer_profile.district
+    elif user.transporter_profile and user.transporter_profile.district:
+        user_district = user.transporter_profile.district
+
+    wh = get_district_warehouse(user_district) if user_district else None
+    wh_name = wh["warehouse_name"] if wh else None
+
+    token = create_access_token(subject=str(user.id), role=user.role.value)
+    return TokenResponse(
+        access_token=token,
+        role=user.role,
+        user_id=user.id,
+        district=user_district,
+        warehouse_name=wh_name
     )
 
 

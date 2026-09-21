@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.models import (
-    User, RoleEnum, ProductListing, Product, Category, FarmerProfile, FPOProfile, OrderItem
+    User, RoleEnum, ProductListing, Product, Category, FarmerProfile, FPOProfile, OrderItem,
+    BulkRequirement, SupplierMatch, BuyerProfile, Notification
 )
 from app.schemas.schemas import ListingCreate, ListingUpdate, ListingOut
 from app.services.perishability_service import check_and_notify_perishability
@@ -42,8 +43,8 @@ def _serialize(
     status = listing.calculate_perishability_status()
     channels = listing.get_eligible_channels()
 
-    # Real farmer rating & review count
-    farmer_rating = None
+    # Real farmer rating & review count (starts at 5.0 initially, reduced if buyer rates lowly)
+    farmer_rating = 5.0
     farmer_review_count = 0
     if listing.farmer and getattr(listing.farmer, "reviews", None):
         f_revs = listing.farmer.reviews
@@ -52,7 +53,7 @@ def _serialize(
             farmer_rating = round(sum(r.rating for r in f_revs) / farmer_review_count, 1)
 
     # Real product/listing rating
-    prod_rating = None
+    prod_rating = farmer_rating
     prod_review_count = 0
     if getattr(listing, "reviews", None):
         l_revs = listing.reviews
@@ -140,7 +141,111 @@ def create_listing(
     db.commit()
     db.refresh(listing)
     check_and_notify_perishability(db, listing)
+    check_and_assign_advance_demands(db, listing)
     return _serialize(listing)
+
+
+def check_and_assign_advance_demands(db: Session, listing: ProductListing):
+    """
+    Priority Advance Booking Auto-Assignment:
+    When a farmer lists produce, automatically matches and assigns it with FIRST PRIORITY
+    to the earliest buyers who submitted advance crop demands (ordered by created_at ASC).
+    """
+    if listing.quantity_available <= 0 or not listing.is_active:
+        return
+
+    # Find open advance demands for this product, ordered by earliest applicant first (FIRST PRIORITY)
+    open_demands = (
+        db.query(BulkRequirement)
+        .options(
+            joinedload(BulkRequirement.buyer).joinedload(BuyerProfile.user),
+            joinedload(BulkRequirement.matches),
+            joinedload(BulkRequirement.product)
+        )
+        .filter(
+            BulkRequirement.product_id == listing.product_id,
+            BulkRequirement.status.in_(["OPEN", "PARTIALLY_MATCHED"])
+        )
+        .order_by(BulkRequirement.created_at.asc())
+        .all()
+    )
+
+    if not open_demands:
+        return
+
+    seller_name = (
+        listing.farmer.full_name if listing.farmer
+        else (listing.fpo.organization_name if listing.fpo else "Verified Producer")
+    )
+
+    for demand in open_demands:
+        if listing.quantity_available <= 0:
+            break
+
+        already_matched = sum(m.matched_quantity for m in (demand.matches or []))
+        needed = demand.required_quantity - already_matched
+        if needed <= 0:
+            demand.status = "MATCHED"
+            continue
+
+        alloc_qty = min(listing.quantity_available, needed)
+        if alloc_qty > 0:
+            # Create SupplierMatch record
+            match = SupplierMatch(
+                requirement_id=demand.id,
+                listing_id=listing.id,
+                matched_quantity=alloc_qty,
+                farmer_price=listing.price_per_unit,
+                logistics_cost=Decimal("0"),
+                platform_fee=Decimal("0"),
+            )
+            db.add(match)
+
+            # Deduct from listing available quantity to reserve it for priority buyer
+            listing.quantity_available -= alloc_qty
+            if (already_matched + alloc_qty) >= demand.required_quantity:
+                demand.status = "MATCHED"
+            else:
+                demand.status = "PARTIALLY_MATCHED"
+
+            # 1. Send push notification to the early applicant Buyer
+            if demand.buyer and demand.buyer.user_id:
+                db.add(Notification(
+                    user_id=demand.buyer.user_id,
+                    title=f"🎉 Advance Booking Assigned: {alloc_qty} kg {listing.product.name} Reserved!",
+                    message=(
+                        f"Fresh {listing.product.name} has arrived from {seller_name}. "
+                        f"Your advance booking has been assigned with #1 PRIORITY! "
+                        f"({alloc_qty} kg reserved at ₹{listing.price_per_unit}/kg)."
+                    ),
+                    notification_type="ORDER",
+                    link="/buyer/advance-demands",
+                    is_read=False,
+                    created_at=datetime.utcnow(),
+                ))
+
+            # 2. Send notification to the Farmer
+            if listing.farmer and listing.farmer.user_id:
+                buyer_display = demand.buyer.full_name if demand.buyer else "Advance Buyer"
+                db.add(Notification(
+                    user_id=listing.farmer.user_id,
+                    title=f"🎯 Advance Demand Auto-Matched ({alloc_qty} kg)!",
+                    message=(
+                        f"{alloc_qty} kg of your {listing.product.name} listing was automatically allocated "
+                        f"to priority buyer {buyer_display}."
+                    ),
+                    notification_type="ORDER",
+                    link="/farmer/dashboard",
+                    is_read=False,
+                    created_at=datetime.utcnow(),
+                ))
+
+    if listing.quantity_available <= 0:
+        listing.is_active = False
+
+    db.commit()
+    db.refresh(listing)
+
 
 
 @router.get("/mine", response_model=list[ListingOut])

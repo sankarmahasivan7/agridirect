@@ -180,7 +180,7 @@ export default function BuyerDashboard() {
               <Link
                 key={idx}
                 to={action.link}
-                className="group relative bg-white border border-gray-100 rounded-xl p-5 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
+                className="group relative bg-white border border-gray-100 rounded-xl p-5 hover:shadow-lg hover:border-emerald-200 transition-all duration-200 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">

@@ -63,6 +63,7 @@ KNOWN_LOCATIONS = {
     "courtallam": (8.9324, 77.2736),
     "kutralam": (8.9324, 77.2736),
     "palayamkottai": (8.7180, 77.7420),
+    "pettai": (8.7300, 77.6800),
     "ambasamudram": (8.7058, 77.4583),
     "cheranmahadevi": (8.6833, 77.5667),
     "kalakkad": (8.5133, 77.5500),
