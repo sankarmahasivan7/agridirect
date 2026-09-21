@@ -39,12 +39,18 @@ def notify_order_placed(db: Session, order: Order):
     3. Notifies Transporters of newly available transport jobs.
     """
     # 1. Buyer Notification with Delivery Verification OTP
-    if order.buyer and order.buyer.user_id:
+    buyer = order.buyer
+    if not buyer and order.buyer_id:
+        from app.models.models import BuyerProfile
+        buyer = db.query(BuyerProfile).filter(BuyerProfile.id == order.buyer_id).first()
+        order.buyer = buyer
+
+    if buyer and getattr(buyer, "user_id", None):
         otp_title = f"Order #{order.id} Placed Successfully! (Delivery OTP: {order.delivery_otp})" if order.delivery_otp else f"Order #{order.id} Placed Successfully!"
         otp_info = f" Your Secret Delivery Verification OTP is {order.delivery_otp}. Please share this OTP with the delivery driver upon arrival to receive your produce." if order.delivery_otp else ""
         create_notification(
             db=db,
-            user_id=order.buyer.user_id,
+            user_id=buyer.user_id,
             title=otp_title,
             message=(
                 f"Your order of {len(order.items)} item(s) (₹{order.total_amount}) has been confirmed.{otp_info} "
@@ -57,20 +63,28 @@ def notify_order_placed(db: Session, order: Order):
     # 2. Seller Notifications (deduplicated per seller)
     notified_sellers = set()
     for item in order.items:
-        listing = item.listing
-        seller_uid = None
-        if listing.farmer_id and listing.farmer:
-            seller_uid = listing.farmer.user_id
-        elif listing.fpo_id and listing.fpo:
-            seller_uid = listing.fpo.user_id
+        listing = getattr(item, "listing", None)
+        if not listing and item.listing_id:
+            from app.models.models import ProductListing
+            listing = db.query(ProductListing).filter(ProductListing.id == item.listing_id).first()
+            item.listing = listing
 
-        if seller_uid and seller_uid not in notified_sellers:
+        seller_uid = None
+        if listing:
+            if getattr(listing, "farmer_id", None) and getattr(listing, "farmer", None):
+                seller_uid = listing.farmer.user_id
+            elif getattr(listing, "fpo_id", None) and getattr(listing, "fpo", None):
+                seller_uid = listing.fpo.user_id
+
+        if seller_uid and seller_uid not in notified_sellers and listing:
+            product_name = listing.product.name if getattr(listing, "product", None) else "produce"
+            unit = getattr(listing, "unit", "kg")
             create_notification(
                 db=db,
                 user_id=seller_uid,
                 title=f"New Order Received: #{order.id}",
                 message=(
-                    f"A buyer placed an order for {item.quantity} {listing.unit} of {listing.product.name}. "
+                    f"A buyer placed an order for {item.quantity} {unit} of {product_name}. "
                     f"Prepare consignment for District Warehouse fulfillment."
                 ),
                 notification_type="ORDER",

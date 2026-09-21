@@ -11,11 +11,12 @@ independently to the closest feasible vehicle -- which naturally means two
 far-apart farmers in the same order can end up assigned to two different,
 geographically-appropriate vehicles, without any fabricated routing.
 """
+from typing import Optional, List, Dict, Any, Tuple
 from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.constants import get_district_warehouse
@@ -160,7 +161,7 @@ def find_feasible_vehicle(db: Session, weight_kg, pickup_lat=None, pickup_lon=No
     return ranked[0]
 
 
-def _seller_warehouse_pickup_info(listing: ProductListing):
+def _seller_warehouse_pickup_info(listing: Optional[ProductListing]):
     """
     Implements 1-warehouse-per-district strategy:
     Resolves the seller's registered district (Tenkasi, Tirunelveli, Thoothukudi)
@@ -168,16 +169,16 @@ def _seller_warehouse_pickup_info(listing: ProductListing):
     """
     seller_district = None
     seller_name = "Direct Farmer"
-    fallback_loc = listing.location
+    fallback_loc = getattr(listing, "location", None) if listing else None
 
-    if listing.farmer_id and listing.farmer:
+    if listing and getattr(listing, "farmer_id", None) and getattr(listing, "farmer", None):
         f = listing.farmer
-        seller_name = f.full_name
+        seller_name = f.full_name or seller_name
         seller_district = f.district
         fallback_loc = f.farm_location or listing.location or f.village_town
-    elif listing.fpo_id and listing.fpo:
+    elif listing and getattr(listing, "fpo_id", None) and getattr(listing, "fpo", None):
         fpo = listing.fpo
-        seller_name = fpo.organization_name
+        seller_name = fpo.organization_name or seller_name
         seller_district = fpo.district
         fallback_loc = fpo.location or listing.location
 
@@ -197,24 +198,48 @@ def create_transport_requests_for_order(db: Session, order: Order):
        and deliver to the buyer's delivery destination.
     """
     buyer = order.buyer
-    dest_label = order.delivery_location
+    if not buyer and order.buyer_id:
+        from app.models.models import BuyerProfile
+        buyer = db.query(BuyerProfile).filter(BuyerProfile.id == order.buyer_id).first()
+        order.buyer = buyer
+
+    dest_label = order.delivery_location or "Destination"
     dest_lat = order.delivery_latitude if order.delivery_latitude is not None else (buyer.default_latitude if buyer else None)
     dest_lon = order.delivery_longitude if order.delivery_longitude is not None else (buyer.default_longitude if buyer else None)
 
     groups = defaultdict(list)
     for item in order.items:
-        listing = item.listing
-        key = ("farmer", listing.farmer_id) if listing.farmer_id else ("fpo", listing.fpo_id)
+        listing = getattr(item, "listing", None)
+        if not listing and item.listing_id:
+            listing = (
+                db.query(ProductListing)
+                .options(
+                    joinedload(ProductListing.farmer),
+                    joinedload(ProductListing.fpo),
+                    joinedload(ProductListing.product),
+                )
+                .filter(ProductListing.id == item.listing_id)
+                .first()
+            )
+            item.listing = listing
+
+        farmer_id = getattr(listing, "farmer_id", None) if listing else None
+        fpo_id = getattr(listing, "fpo_id", None) if listing else None
+        key = ("farmer", farmer_id) if farmer_id else ("fpo", fpo_id)
         groups[key].append(item)
 
     created = []
     required_by = datetime.utcnow() + timedelta(days=DEFAULT_REQUIRED_WITHIN_DAYS)
+    buyer_uid = buyer.user_id if buyer else (getattr(order, "buyer", None) and getattr(order.buyer, "user_id", None))
 
     for _key, items in groups.items():
         listing = items[0].listing
         pickup_label, pickup_lat, pickup_lon, warehouse, seller_name = _seller_warehouse_pickup_info(listing)
         total_weight = sum(float(i.quantity) for i in items)
-        cargo_desc = ", ".join(f"{i.listing.product.name} x{i.quantity}{i.listing.unit}" for i in items)
+        cargo_desc = ", ".join(
+            f"{i.listing.product.name if (i.listing and i.listing.product) else 'Item'} x{i.quantity}{i.listing.unit if i.listing else 'kg'}"
+            for i in items
+        )
         notes = f"[{warehouse['code']}] {warehouse['warehouse_name']} | Seller: {seller_name} | Items: {cargo_desc}"
 
         # 1. Real road distance from District Warehouse to Buyer's destination (Google Maps / OSRM)
@@ -235,8 +260,8 @@ def create_transport_requests_for_order(db: Session, order: Order):
         assigned_id = vehicle.id if vehicle else None
 
         # Determine perishability urgency across items in this consignment
-        is_perishable = any(bool(i.listing.is_perishable) for i in items)
-        urgencies = [i.listing.calculate_perishability_status() for i in items if i.listing.is_perishable]
+        is_perishable = any(bool(i.listing.is_perishable) for i in items if i.listing)
+        urgencies = [i.listing.calculate_perishability_status() for i in items if (i.listing and i.listing.is_perishable)]
         if "CRITICAL" in urgencies:
             perish_urgency = "CRITICAL"
         elif "URGENT" in urgencies:
@@ -246,14 +271,14 @@ def create_transport_requests_for_order(db: Session, order: Order):
         else:
             perish_urgency = "NORMAL"
 
-        storage_reqs = [i.listing.storage_requirement for i in items if i.listing.storage_requirement]
+        storage_reqs = [i.listing.storage_requirement for i in items if (i.listing and i.listing.storage_requirement)]
         storage_req = ", ".join(set(storage_reqs)) if storage_reqs else None
 
-        avail_dates = [i.listing.available_from or i.listing.harvest_date for i in items if (i.listing.available_from or i.listing.harvest_date)]
+        avail_dates = [i.listing.available_from or i.listing.harvest_date for i in items if (i.listing and (i.listing.available_from or i.listing.harvest_date))]
         req_available_from = max(avail_dates) if avail_dates else None
 
         req = TransportRequest(
-            requested_by_user_id=order.buyer.user_id,
+            requested_by_user_id=buyer_uid or 1,
             order_id=order.id,
             pickup_location=pickup_label,
             pickup_latitude=pickup_lat,

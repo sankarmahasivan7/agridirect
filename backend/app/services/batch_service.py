@@ -99,14 +99,17 @@ BATCH_STATUS_TRANSITIONS = {
 }
 
 
-def _resolve_seller_warehouse(listing: ProductListing) -> Dict[str, Any]:
+def _resolve_seller_warehouse(listing: Optional[ProductListing]) -> Dict[str, Any]:
     """Resolves the source district warehouse for a product listing."""
     district = None
-    if listing.farmer and listing.farmer.district:
-        district = listing.farmer.district
-    elif listing.fpo and listing.fpo.district:
-        district = listing.fpo.district
-    return get_district_warehouse(district, fallback_text=listing.location)
+    fallback = None
+    if listing:
+        fallback = getattr(listing, "location", None)
+        if getattr(listing, "farmer", None) and getattr(listing.farmer, "district", None):
+            district = listing.farmer.district
+        elif getattr(listing, "fpo", None) and getattr(listing.fpo, "district", None):
+            district = listing.fpo.district
+    return get_district_warehouse(district, fallback_text=fallback)
 
 
 def _resolve_order_district(order: Order) -> str:
@@ -134,8 +137,22 @@ def create_fulfillment_items_for_order(db: Session, order: Order) -> List[OrderF
     """
     items = []
     for order_item in order.items:
-        wh = _resolve_seller_warehouse(order_item.listing)
-        item_avail = order_item.listing.available_from or order_item.listing.harvest_date
+        listing = getattr(order_item, "listing", None)
+        if not listing and order_item.listing_id:
+            listing = (
+                db.query(ProductListing)
+                .options(
+                    joinedload(ProductListing.farmer),
+                    joinedload(ProductListing.fpo),
+                    joinedload(ProductListing.product),
+                )
+                .filter(ProductListing.id == order_item.listing_id)
+                .first()
+            )
+            order_item.listing = listing
+
+        wh = _resolve_seller_warehouse(listing)
+        item_avail = getattr(listing, "available_from", None) or getattr(listing, "harvest_date", None) if listing else None
         fulfillment_item = OrderFulfillmentItem(
             order_id=order.id,
             order_item_id=order_item.id,

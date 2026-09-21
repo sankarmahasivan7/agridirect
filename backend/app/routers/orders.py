@@ -44,20 +44,35 @@ def dispatch_order_fulfillment(db: Session, order: Order):
     Activates delivery jobs, splits by source warehouses, creates transport requests and batches.
     Only called when an order is confirmed (immediately for POD, or after payment verification for UPI).
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Split order internally into OrderFulfillmentItems linked to source warehouses
-    create_fulfillment_items_for_order(db, order)
+    try:
+        create_fulfillment_items_for_order(db, order)
+    except Exception as e:
+        logger.exception("Failed to create fulfillment items for order #%s: %s", getattr(order, "id", None), e)
 
     # Automatically request and assign transport
-    create_transport_requests_for_order(db, order)
-    db.flush()
+    try:
+        create_transport_requests_for_order(db, order)
+        db.flush()
+    except Exception as e:
+        logger.exception("Failed to create transport requests for order #%s: %s", getattr(order, "id", None), e)
 
     # Automatically trigger multi-order consolidation for this delivery district
-    order_district = _resolve_order_district(order)
-    create_delivery_batches(db, delivery_district=order_district)
-    db.flush()
+    try:
+        order_district = _resolve_order_district(order)
+        create_delivery_batches(db, delivery_district=order_district)
+        db.flush()
+    except Exception as e:
+        logger.exception("Failed to create delivery batches for order #%s: %s", getattr(order, "id", None), e)
 
     # Dispatch real-time push notifications across Buyer, Seller(s), and Transporters
-    notify_order_placed(db, order)
+    try:
+        notify_order_placed(db, order)
+    except Exception as e:
+        logger.exception("Failed to send order placed notifications for order #%s: %s", getattr(order, "id", None), e)
 
 
 def _serialize_order(order: Order, razorpay_order: dict = None, db: Session = None) -> OrderOut:
@@ -244,6 +259,7 @@ def create_order(
 
         order_items.append(OrderItem(
             listing_id=listing.id,
+            listing=listing,
             quantity=cart_item.quantity,
             price_at_purchase=listing.price_per_unit,
             line_subtotal=line_subtotal,
@@ -293,6 +309,7 @@ def create_order(
 
     order = Order(
         buyer_id=buyer_p.id,
+        buyer=buyer_p,
         subtotal=subtotal,
         logistics_cost=logistics_cost,
         platform_fee=platform_fee,

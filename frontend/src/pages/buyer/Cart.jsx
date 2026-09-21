@@ -177,10 +177,22 @@ export default function Cart() {
         setLoading(false)
       }
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || t('cart.checkoutFailed', 'Checkout failed. Please try again.')
-      const displayMsg = typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+      console.error('Checkout error:', err)
+      let displayMsg = t('cart.checkoutFailed', 'Checkout failed. Please try again.')
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        if (typeof detail === 'string') {
+          displayMsg = detail
+        } else if (Array.isArray(detail)) {
+          displayMsg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(' | ')
+        } else {
+          displayMsg = JSON.stringify(detail)
+        }
+      } else if (err.message) {
+        displayMsg = err.message
+      }
       setError(displayMsg)
-      addToast(displayMsg, 'error', 5000)
+      addToast(displayMsg, 'error', 6000)
       setLoading(false)
     }
   }
@@ -199,10 +211,22 @@ export default function Cart() {
       clearCart()
       addToast(`Payment confirmed! Order #${activeQrOrder.id} dispatched to ${selectedDistrict} Hub.`, 'success', 6000)
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Failed to verify UPI payment. Please check your transaction details.'
-      const displayMsg = typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+      console.error('QR Confirm payment error:', err)
+      let displayMsg = 'Failed to verify UPI payment. Please check your transaction details.'
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        if (typeof detail === 'string') {
+          displayMsg = detail
+        } else if (Array.isArray(detail)) {
+          displayMsg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(' | ')
+        } else {
+          displayMsg = JSON.stringify(detail)
+        }
+      } else if (err.message) {
+        displayMsg = err.message
+      }
       setError(displayMsg)
-      addToast(displayMsg, 'error', 5000)
+      addToast(displayMsg, 'error', 6000)
     } finally {
       setConfirmingQr(false)
     }
