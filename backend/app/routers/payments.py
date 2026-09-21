@@ -34,7 +34,11 @@ def confirm_qr_payment(
     """
     order = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.payment),
+            joinedload(Order.buyer),
+        )
         .filter(Order.id == payload.order_id)
         .with_for_update(of=Order)
         .first()
@@ -42,9 +46,13 @@ def confirm_qr_payment(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Order #{payload.order_id} not found")
 
-    if user.role != RoleEnum.admin:
-        if not user.buyer_profile or order.buyer_id != user.buyer_profile.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to confirm payment for this order")
+    is_authorized = (
+        user.role == RoleEnum.admin
+        or (user.buyer_profile and order.buyer_id == user.buyer_profile.id)
+        or (order.buyer and order.buyer.user_id == user.id)
+    )
+    if not is_authorized:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to confirm payment for this order")
 
     # Idempotency check
     if order.payment_status == PaymentStatusEnum.PAID:
@@ -104,7 +112,11 @@ def verify_payment(
     """
     order = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.payment),
+            joinedload(Order.buyer),
+        )
         .filter(Order.id == payload.order_id)
         .with_for_update(of=Order)
         .first()
@@ -113,9 +125,13 @@ def verify_payment(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Order #{payload.order_id} not found")
 
     # Access control: buyer who placed the order or admin
-    if user.role != RoleEnum.admin:
-        if not user.buyer_profile or order.buyer_id != user.buyer_profile.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to verify payment for this order")
+    is_authorized = (
+        user.role == RoleEnum.admin
+        or (user.buyer_profile and order.buyer_id == user.buyer_profile.id)
+        or (order.buyer and order.buyer.user_id == user.id)
+    )
+    if not is_authorized:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to verify payment for this order")
 
     # Idempotency check
     if order.payment_status == PaymentStatusEnum.PAID:
@@ -190,7 +206,11 @@ def fail_payment(
     """
     order = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.listing), joinedload(Order.payment))
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.listing),
+            joinedload(Order.payment),
+            joinedload(Order.buyer),
+        )
         .filter(Order.id == payload.order_id)
         .with_for_update(of=Order)
         .first()
@@ -198,9 +218,13 @@ def fail_payment(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Order #{payload.order_id} not found")
 
-    if user.role != RoleEnum.admin:
-        if not user.buyer_profile or order.buyer_id != user.buyer_profile.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to update payment for this order")
+    is_authorized = (
+        user.role == RoleEnum.admin
+        or (user.buyer_profile and order.buyer_id == user.buyer_profile.id)
+        or (order.buyer and order.buyer.user_id == user.id)
+    )
+    if not is_authorized:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized to update payment for this order")
 
     if order.payment_status == PaymentStatusEnum.PAID:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot fail an already paid order")

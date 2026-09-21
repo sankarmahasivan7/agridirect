@@ -18,6 +18,7 @@ import {
   ClipboardList
 } from 'lucide-react'
 import NotificationBell from './NotificationBell.jsx'
+import logoImg from '../assets/logo_trans.png'
 
 export default function Navbar() {
   const { isAuthenticated, role, logout } = useAuth()
@@ -134,8 +135,8 @@ export default function Navbar() {
             
             {/* Brand Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-700 via-emerald-600 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-700/25 ring-2 ring-emerald-500/20 group-hover:scale-105 transition-all duration-200">
-                <Sprout className="w-5 h-5 text-emerald-100" />
+              <div className="w-10 h-10 rounded-xl bg-black/90 border border-emerald-500/30 flex items-center justify-center p-1 shadow-md shadow-emerald-900/20 group-hover:scale-105 transition-all duration-200">
+                <img src={logoImg} alt="AgriDirect Logo" className="w-full h-full object-contain filter drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
               </div>
               <div>
                 <span className="font-extrabold text-xl tracking-tight text-slate-900 flex items-center gap-1.5">

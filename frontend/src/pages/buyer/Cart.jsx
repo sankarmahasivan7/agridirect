@@ -131,6 +131,17 @@ export default function Cart() {
 
   const handleCheckout = async () => {
     setError('')
+    if (!user) {
+      addToast('Please log in or create an account to place your order.', 'warning', 4500)
+      navigate('/buyer/login')
+      return
+    }
+
+    if (!items || items.length === 0) {
+      setError('Your cart is empty.')
+      return
+    }
+
     const address = deliveryLocation.trim() 
       ? `${deliveryLocation.trim()}, ${selectedDistrict}`
       : `${selectedDistrict} Central Destination`
@@ -166,7 +177,10 @@ export default function Cart() {
         setLoading(false)
       }
     } catch (err) {
-      setError(err.response?.data?.detail || t('cart.checkoutFailed', 'Checkout failed. Please try again.'))
+      const errorMsg = err.response?.data?.detail || t('cart.checkoutFailed', 'Checkout failed. Please try again.')
+      const displayMsg = typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+      setError(displayMsg)
+      addToast(displayMsg, 'error', 5000)
       setLoading(false)
     }
   }
@@ -185,7 +199,10 @@ export default function Cart() {
       clearCart()
       addToast(`Payment confirmed! Order #${activeQrOrder.id} dispatched to ${selectedDistrict} Hub.`, 'success', 6000)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to verify UPI payment. Please check your transaction details.')
+      const errorMsg = err.response?.data?.detail || 'Failed to verify UPI payment. Please check your transaction details.'
+      const displayMsg = typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+      setError(displayMsg)
+      addToast(displayMsg, 'error', 5000)
     } finally {
       setConfirmingQr(false)
     }

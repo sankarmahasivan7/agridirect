@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.core.deps import require_role
+from app.core.deps import require_role, get_current_user
 from app.models.models import (
     User, RoleEnum, ProductListing, Order, OrderItem, OrderStatusEnum, Transaction, Notification,
-    PaymentMethodEnum, PaymentStatusEnum, Payment, TransportRequest, TransportRequestStatusEnum
+    PaymentMethodEnum, PaymentStatusEnum, Payment, TransportRequest, TransportRequestStatusEnum,
+    BuyerProfile, BuyerTypeEnum
 )
 from app.schemas.schemas import (
     OrderCreate, OrderOut, OrderItemOut, OrderCancelIn,
@@ -155,19 +156,44 @@ def _serialize_order(order: Order, razorpay_order: dict = None, db: Session = No
 def create_order(
     payload: OrderCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role(RoleEnum.buyer)),
+    user: User = Depends(get_current_user),
 ):
     """
     Validates requested quantities against the ACTUAL available quantities,
     locks the rows, and decrements inventory atomically to prevent overselling.
     Supports PAY_ON_DELIVERY and UPI / ONLINE PAYMENT methods.
+    Available to any authenticated user (buyers, farmers, transporters, admins).
     """
     if not payload.items:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cart is empty")
 
     buyer_p = getattr(user, "buyer_profile", None)
-    delivery_lat = float(payload.delivery_latitude) if payload.delivery_latitude is not None else (float(buyer_p.latitude) if (buyer_p and getattr(buyer_p, "latitude", None) is not None) else 8.7139)
-    delivery_lon = float(payload.delivery_longitude) if payload.delivery_longitude is not None else (float(buyer_p.longitude) if (buyer_p and getattr(buyer_p, "longitude", None) is not None) else 77.7567)
+    saved_lat = getattr(buyer_p, "default_latitude", None) or getattr(buyer_p, "latitude", None)
+    saved_lon = getattr(buyer_p, "default_longitude", None) or getattr(buyer_p, "longitude", None)
+    delivery_lat = float(payload.delivery_latitude) if payload.delivery_latitude is not None else (float(saved_lat) if saved_lat is not None else 8.7139)
+    delivery_lon = float(payload.delivery_longitude) if payload.delivery_longitude is not None else (float(saved_lon) if saved_lon is not None else 77.7567)
+
+    if not buyer_p:
+        full_name = user.email.split("@")[0] if user.email else "AgriDirect Buyer"
+        district = "Tirunelveli"
+        if getattr(user, "farmer_profile", None):
+            full_name = user.farmer_profile.full_name or full_name
+            district = user.farmer_profile.district or district
+        elif getattr(user, "transporter_profile", None):
+            full_name = user.transporter_profile.full_name or full_name
+            district = user.transporter_profile.district or district
+        buyer_p = BuyerProfile(
+            user_id=user.id,
+            full_name=full_name,
+            buyer_type=BuyerTypeEnum.consumer,
+            district=district,
+            location=payload.delivery_location or f"{district} Central Destination",
+            default_latitude=Decimal(str(delivery_lat)),
+            default_longitude=Decimal(str(delivery_lon)),
+        )
+        db.add(buyer_p)
+        db.flush()
+        user.buyer_profile = buyer_p
 
     subtotal = Decimal("0")
     order_items: list[OrderItem] = []
@@ -266,7 +292,7 @@ def create_order(
     generated_otp = f"{random.randint(100000, 999999)}"
 
     order = Order(
-        buyer_id=user.buyer_profile.id,
+        buyer_id=buyer_p.id,
         subtotal=subtotal,
         logistics_cost=logistics_cost,
         platform_fee=platform_fee,
@@ -422,7 +448,9 @@ def quote_transport_fee(
 
 
 @router.get("/mine", response_model=list[OrderOut])
-def my_orders(db: Session = Depends(get_db), user: User = Depends(require_role(RoleEnum.buyer))):
+def my_orders(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if not user.buyer_profile:
+        return []
     orders = (
         db.query(Order)
         .options(
@@ -516,7 +544,7 @@ def cancel_order_buyer(
     order_id: int,
     payload: Optional[OrderCancelIn] = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_role(RoleEnum.buyer, RoleEnum.admin)),
+    user: User = Depends(get_current_user),
 ):
     """
     Buyer cancellation endpoint enforcing the 1-hour cancellation rule:
@@ -539,7 +567,12 @@ def cancel_order_buyer(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
-    if user.role != RoleEnum.admin and order.buyer_id != getattr(user.buyer_profile, "id", None):
+    is_owner = (
+        user.role == RoleEnum.admin
+        or (user.buyer_profile and order.buyer_id == user.buyer_profile.id)
+        or (order.buyer and order.buyer.user_id == user.id)
+    )
+    if not is_owner:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not own this order")
 
     if order.status == OrderStatusEnum.CANCELLED:

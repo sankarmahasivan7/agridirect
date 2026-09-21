@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import VoiceAssistant from './components/VoiceAssistant.jsx'
+import SplashScreen from './components/SplashScreen.jsx'
 
 import Landing from './pages/Landing.jsx'
 import RoleLogin from './pages/RoleLogin.jsx'
@@ -49,6 +50,7 @@ export default function App() {
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <SplashScreen />
       <ScrollToTop />
       <Navbar />
       <div key={language} className="min-h-[calc(100vh-4rem)] flex flex-col pb-20 md:pb-0">
