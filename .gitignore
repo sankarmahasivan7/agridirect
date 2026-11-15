@@ -17,6 +17,9 @@ env/
 node_modules/
 frontend/node_modules/
 video/node_modules/
+.vercel/
+frontend/.vercel/
+backend/.vercel/
 
 # Build
 frontend/dist/
