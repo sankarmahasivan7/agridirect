@@ -7,11 +7,11 @@ const resolveBaseUrl = () => {
   }
   // When running inside native mobile APK, loopback localhost doesn't exist on device; default to live backend API
   if (Capacitor.isNativePlatform()) {
-    return 'https://agridirect-back.onrender.com'
+    return 'https://agridirect-back-node.onrender.com'
   }
   // If hosted on production (e.g. Render static site or custom domain), route to production backend
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return 'https://agridirect-back.onrender.com'
+    return 'https://agridirect-back-node.onrender.com'
   }
   return 'http://localhost:8000'
 }
