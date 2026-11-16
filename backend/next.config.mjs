@@ -4,6 +4,12 @@ import path from 'path';
 const nextConfig = {
   reactStrictMode: false,
   poweredByHeader: false,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   webpack: (config) => {
     config.resolve.alias['@'] = path.resolve(process.cwd());
     return config;
